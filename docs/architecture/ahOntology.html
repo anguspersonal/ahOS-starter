@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ahOntology — Cytoscape view</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fafafa; color: #222; }
+  #app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { padding: 8px 14px; border-bottom: 1px solid #ddd; background: #fff; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .meta { font-size: 11px; color: #888; }
+  header input[type="search"] { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; width: 200px; }
+  header button { padding: 4px 10px; font-size: 11px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
+  header button:hover { background: #f0f0f0; }
+  header .toggle-group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  header .toggle-group .group-label { font-size: 11px; color: #666; margin-right: 4px; }
+  header label.toggle { font-size: 11px; padding: 3px 8px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; background: #fff; user-select: none; }
+  header label.toggle.on { background: #333; color: #fff; border-color: #333; }
+  header label.toggle input { display: none; }
+  header .layout-toggle { display: flex; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+  header .layout-toggle button { border: 0; background: #fff; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; color: #555; line-height: 0; }
+  header .layout-toggle button.active { background: #333; color: #fff; }
+  header .layout-toggle button:hover:not(.active) { background: #f0f0f0; }
+  header .layout-toggle button svg { display: block; }
+  main { display: grid; grid-template-columns: 1fr 280px; min-height: 0; }
+  #cy { background: #fafafa; }
+  aside { border-left: 1px solid #ddd; background: #fff; padding: 10px 14px; overflow-y: auto; font-size: 12px; }
+  aside h2 { font-size: 12px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; color: #666; }
+  aside h2:first-child { margin-top: 0; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.2); }
+  .legend-line { width: 18px; height: 0; border-top: 2px solid; flex-shrink: 0; }
+  #node-info { font-size: 12px; line-height: 1.45; }
+  #node-info .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #888; }
+  #node-info .label { font-weight: 600; font-size: 13px; margin: 4px 0; }
+  #node-info .badge { display: inline-block; padding: 1px 6px; font-size: 10px; border-radius: 3px; background: #eee; color: #555; margin-right: 4px; }
+  details.help { border: 1px solid #ddd; border-radius: 4px; padding: 6px 10px; margin: 4px 0; background: #fdfaff; }
+  details.help summary { cursor: pointer; font-weight: 600; font-size: 12px; color: #be185d; }
+  details.help[open] { padding-bottom: 10px; }
+  details.help table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+  details.help th, details.help td { border-bottom: 1px solid #eee; padding: 4px 6px; text-align: left; vertical-align: top; }
+  details.help th { background: #f5e6f0; font-weight: 600; color: #333; }
+  details.help code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #eee; padding: 1px 3px; border-radius: 2px; font-size: 10px; }
+  details.help p { font-size: 11px; line-height: 1.5; margin: 6px 0; color: #555; }
+
+  /* Loader / fetch-failure overlay */
+  #loader-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.96); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  #loader-overlay .panel { max-width: 560px; padding: 24px 28px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1.55; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  #loader-overlay h2 { margin: 0 0 8px; font-size: 14px; color: #be185d; }
+  #loader-overlay code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
+  #loader-overlay .hint { color: #666; font-size: 12px; margin-top: 14px; }
+  #loader-overlay.error h2 { color: #b91c1c; }
+  #loader-overlay pre { background: #f9f9f9; border: 1px solid #eee; padding: 8px 10px; border-radius: 4px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>ahOntology</h1>
+    <span class="meta">live snapshot · parses ahOntology.ttl at runtime</span>
+    <input id="search" type="search" placeholder="search…" />
+    <button id="fit">fit</button>
+    <button id="relayout">relayout</button>
+    <div class="layout-toggle" id="layout-toggle" title="Switch layout">
+      <button class="active" data-layout="mindmap" title="Mind map (force-directed)">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+          <line x1="8" y1="8" x2="3" y2="3"/>
+          <line x1="8" y1="8" x2="13" y2="3"/>
+          <line x1="8" y1="8" x2="3" y2="13"/>
+          <line x1="8" y1="8" x2="13" y2="13"/>
+          <circle cx="8" cy="8" r="2.4" fill="currentColor"/>
+          <circle cx="3" cy="3" r="1.4" fill="currentColor"/>
+          <circle cx="13" cy="3" r="1.4" fill="currentColor"/>
+          <circle cx="3" cy="13" r="1.4" fill="currentColor"/>
+          <circle cx="13" cy="13" r="1.4" fill="currentColor"/>
+        </svg>
+      </button>
+      <button data-layout="hierarchy" title="Hierarchy (tree from root)">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="6" y="1" width="4" height="3" fill="currentColor"/>
+          <line x1="8" y1="4" x2="8" y2="6.5"/>
+          <line x1="3" y1="6.5" x2="13" y2="6.5"/>
+          <line x1="3" y1="6.5" x2="3" y2="9"/>
+          <line x1="8" y1="6.5" x2="8" y2="9"/>
+          <line x1="13" y1="6.5" x2="13" y2="9"/>
+          <rect x="1" y="9" width="4" height="3" fill="currentColor"/>
+          <rect x="6" y="9" width="4" height="3" fill="currentColor"/>
+          <rect x="11" y="9" width="4" height="3" fill="currentColor"/>
+        </svg>
+      </button>
+      <button data-layout="flow" title="Data Flow (filter to Flow-typed edges)">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M 1 4 L 7 4 M 5 2.5 L 7 4 L 5 5.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 1 8 L 13 8 M 11 6.5 L 13 8 L 11 9.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 1 12 L 7 12 M 5 10.5 L 7 12 L 5 13.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="toggle-group" id="level-toggles">
+      <span class="group-label">Level:</span>
+    </div>
+    <div class="toggle-group" id="box-toggles">
+      <span class="group-label">Box:</span>
+    </div>
+  </header>
+  <main>
+    <div id="cy"></div>
+    <aside>
+      <details class="help" id="help">
+        <summary>Vocab guide — two axes</summary>
+        <p>Every node carries <strong>two orthogonal tags</strong>: <code>ahos:level</code> (semantic role) and <code>ahos:inBox</code> (strict W3C schema/data). Filter along either axis using the toggle groups up top.</p>
+        <table>
+          <thead><tr><th>Vocab</th><th>Provides</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>owl:</code></td>
+              <td>the meta tools — <code>Thing</code>, <code>Class</code>, <code>ObjectProperty</code>, <code>DatatypeProperty</code></td>
+              <td>declaring what kind of building block something is</td>
+            </tr>
+            <tr>
+              <td><code>rdfs:</code></td>
+              <td>the relation tools — <code>subClassOf</code>, <code>label</code>, <code>domain</code>, <code>range</code></td>
+              <td>linking blocks together</td>
+            </tr>
+            <tr>
+              <td><code>schema:</code></td>
+              <td>(schema.org) domain concepts — <code>Person</code>, <code>Organization</code>, <code>CreativeWork</code></td>
+              <td>the things in the world</td>
+            </tr>
+            <tr>
+              <td><code>ahos:</code></td>
+              <td>your coined concepts — <code>Entity</code>, <code>KnowledgeFramework</code>, <code>Category</code></td>
+              <td>the things specific to your ontology</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="margin-top:10px;"><strong>Axis 1 — level (semantic role):</strong></p>
+        <p>
+          <strong>meta</strong> — the self-documenting view. The ontology talking about itself. Includes <code>ahOntology</code> (the document), <code>ahos:level</code> + <code>ahos:inBox</code> (the tagging properties), and the external standard vocab we rely on.<br/>
+          <strong>ontology</strong> — "what types of things exist and what do they show". The coined classes and properties — the schema of your vocab.<br/>
+          <strong>instance</strong> — "okay, here is the data". Concrete individuals typed against the classes.
+        </p>
+        <p><strong>Two-axis design for individuals (encoded in the graph):</strong></p>
+        <p>Individuals carry two orthogonal pieces of metadata: <code>rdf:type</code> (what kind) and <code>ahos:hasDomain</code> (which sphere). This is itself documented structurally — see <code>ahos:TypeAxis</code> and <code>ahos:DomainAxis</code> nodes (visible when meta is on), connected to <code>Category</code>, <code>Domain</code>, and <code>hasDomain</code> via <code>ahos:partOfAxis</code>. Three queries fall out: "all X" (by type), "everything Y-flavoured" (by domain), "all Y-flavoured X" (intersection).</p>
+        <p><strong>Axis 2 — box (strict W3C):</strong></p>
+        <p>
+          <strong>TBox</strong> — the schema. Anything declared <code>a owl:Class</code>, <code>a owl:*Property</code>, or <code>a owl:Ontology</code>.<br/>
+          <strong>ABox</strong> — the data. Every other named individual.
+        </p>
+        <p style="font-size:10px;color:#777;"><em>Today: meta&nbsp;+&nbsp;ontology → TBox; instance → ABox. The two axes correlate tightly. They're modelled separately so they CAN decorrelate — the Category-as-metaclass pattern means <code>ahos:Projects</code> is ABox today but functionally TBox-shaped. If you ever want to mark its dual role, you'd flip its inBox there.</em></p>
+        <p style="font-size:10px;color:#777;"><em>And note: <code>ahOntology</code> is TBox (strict rule — it's <code>a owl:Ontology</code>) but plays a META role. Type ≠ role.</em></p>
+      </details>
+      <div id="node-info">
+        <h2>Selection</h2>
+        <p style="color:#888;">Click a node to inspect.</p>
+      </div>
+      <h2>Node types</h2>
+      <div id="legend-nodes"></div>
+      <h2>Edge types</h2>
+      <div id="legend-edges"></div>
+    </aside>
+  </main>
+</div>
+
+<div id="loader-overlay">
+  <div class="panel">
+    <h2>Loading ahOntology.ttl…</h2>
+    <p style="color:#666;">Parsing W3C Turtle source.</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.0/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/n3@1.17.6/browser/n3.min.js"></script>
+<script>
+// ============================================================================
+// VISUAL CONFIG — colours, edge styles, filter axes. Decoupled from data.
+// ============================================================================
+const NODE_TYPES = {
+  class:          { color: '#2e8b57', label: 'owl:Class (TBox)' },
+  property:       { color: '#d97706', label: 'owl:ObjectProperty (TBox)' },
+  framework:      { color: '#0b6b34', label: 'individual : Framework' },
+  category:       { color: '#7a3fb8', label: 'individual : Category (also a class — metaclass)' },
+  store:          { color: '#8b4513', label: 'individual : KnowledgeStore' },
+  os:             { color: '#1d8a8a', label: 'individual : OperatingSystem' },
+  domain:         { color: '#0891b2', label: 'individual : Domain (sphere of activity)' },
+  project:        { color: '#c0392b', label: 'individual : Project (typed against a Category-class)' },
+  task:           { color: '#ca8a04', label: 'individual : Task (typed against a Category-class)' },
+  person:         { color: '#86c1e0', label: 'individual : Person' },
+  ontology:       { color: '#be185d', label: 'individual : Ontology (self-reference)' },
+  registry:       { color: '#475569', label: 'individual : Registry / Graph (system layer)' },
+  capturepath:    { color: '#7c2d12', label: 'individual : Capture Path' },
+  product:        { color: '#15803d', label: 'individual : Product' },
+  outcome:        { color: '#6d28d9', label: 'individual : Outcome' },
+  kpi:            { color: '#b45309', label: 'individual : KPI' },
+  preservation:   { color: '#92400e', label: 'individual : Preservation Level' },
+  enum:           { color: '#6b7280', label: 'individual : enum value (Status, Surface, RelationType, …)' },
+  repo:           { color: '#1f2937', label: 'individual : Code Repository' },
+  table:          { color: '#0e7490', label: 'individual : Table (Database row-store)' },
+  tool:           { color: '#b91c1c', label: 'individual : MCP Server / Tool' },
+  capability:     { color: '#ea580c', label: 'individual : Capability (Skill / Agent / Command / Prompt)' },
+  role:           { color: '#7e22ce', label: 'individual : Memory Role (six-roles taxonomy)' },
+  externalsystem: { color: '#0369a1', label: 'individual : External System (Notion, Drive, Gmail, …)' },
+  artifact:       { color: '#9333ea', label: 'individual : Artifact (base unit of capture)' },
+  team:           { color: '#3f6212', label: 'individual : Team' },
+  channel:        { color: '#a16207', label: 'individual : Correspondence Channel' },
+  principle:      { color: '#4338ca', label: 'individual : Principle (load-bearing design rule)' },
+  binding:        { color: '#a21caf', label: 'individual : Binding (scope-resolved pointer)' },
+  tier:           { color: '#a16207', label: 'individual : Knowledge Tier (Bronze/Silver/Gold)' },
+  period:         { color: '#0f766e', label: 'individual : Period (time-bound context)' },
+  decision:       { color: '#374151', label: 'individual : Decision (ADR)' },
+  contradiction:  { color: '#dc2626', label: 'individual : Contradiction (ADR-020 register)' },
+  openquestion:   { color: '#7c3aed', label: 'individual : Open Question' },
+  boundary:       { color: '#94a3b8', label: 'individual : Boundary (out-of-scope marker)' },
+  knownlimitation:{ color: '#64748b', label: 'individual : Known Limitation' },
+  requirement:    { color: '#0d9488', label: 'individual : Requirement (R1…)' },
+  external:       { color: '#aaa',    label: 'external vocab (owl:Thing, rdfs:Class, owl:Ontology, schema:Person)' },
+};
+
+// rType (relationType) classifies each edge per ahos:relationType:
+//   'Hierarchy' — containment / classification (forms a tree)
+//   'Flow'      — directional data movement (drives flow view)
+//   'Relation'  — generic association
+const EDGE_TYPES = {
+  'rdf:type':       { color: '#222',    style: 'solid',  label: 'a (rdf:type)',                                rType: 'Hierarchy' },
+  'rdfs:subClassOf':{ color: '#666',    style: 'dashed', label: 'rdfs:subClassOf',                              rType: 'Hierarchy' },
+  'rdfs:domain':    { color: '#5a7a8c', style: 'dotted', label: 'rdfs:domain (property → source class)',       rType: 'Relation' },
+  'rdfs:range':     { color: '#5a8c5a', style: 'dotted', label: 'rdfs:range (property → target class)',        rType: 'Relation' },
+  'hasCategory':    { color: '#7a3fb8', style: 'solid',  label: 'ahos:hasCategory',                             rType: 'Hierarchy' },
+  'organisedBy':    { color: '#8b4513', style: 'solid',  label: 'ahos:organisedBy',                             rType: 'Relation' },
+  'createdBy':      { color: '#86c1e0', style: 'solid',  label: 'dcterms:creator (adopted #227; was ahos:createdBy)', rType: 'Relation' },
+  'partOf':         { color: '#c0392b', style: 'solid',  label: 'ahos:partOf',                                  rType: 'Hierarchy' },
+  'describes':      { color: '#be185d', style: 'solid',  label: 'ahos:describes',                               rType: 'Relation' },
+  'hasDomain':      { color: '#0891b2', style: 'solid',  label: 'ahos:hasDomain',                               rType: 'Hierarchy' },
+  'uses':           { color: '#6d28d9', style: 'solid',  label: 'ahos:uses (domain → framework)',               rType: 'Relation' },
+  'partOfAxis':     { color: '#be185d', style: 'solid',  label: 'ahos:partOfAxis (meta — design pattern)',      rType: 'Relation' },
+  'hasOutcome':     { color: '#6d28d9', style: 'solid',  label: 'ahos:hasOutcome',                              rType: 'Relation' },
+  'produces':       { color: '#15803d', style: 'solid',  label: 'ahos:produces',                                rType: 'Flow' },
+  'producesFor':    { color: '#0891b2', style: 'dashed', label: 'ahos:producesFor (product → domain)',          rType: 'Relation' },
+  'measures':       { color: '#b45309', style: 'solid',  label: 'ahos:measures (KPI → Outcome)',                rType: 'Relation' },
+  'preservationLevel': { color: '#92400e', style: 'solid', label: 'ahos:preservationLevel',                     rType: 'Hierarchy' },
+  'capturedVia':    { color: '#7c2d12', style: 'solid',  label: 'ahos:capturedVia',                             rType: 'Flow' },
+  'relationType':   { color: '#a16207', style: 'solid',  label: 'ahos:relationType (meta — classifies relations)', rType: 'Relation' },
+  // Substrate / capability / role / repo properties
+  'exposes':        { color: '#b91c1c', style: 'solid',  label: 'ahos:exposes (server → tool)',         rType: 'Hierarchy' },
+  'invokes':        { color: '#ea580c', style: 'solid',  label: 'ahos:invokes (capability → tool)',     rType: 'Flow' },
+  'writesTo':       { color: '#0e7490', style: 'solid',  label: 'ahos:writesTo',                         rType: 'Flow' },
+  'readsFrom':      { color: '#15803d', style: 'dashed', label: 'ahos:readsFrom',                        rType: 'Flow' },
+  'playsRole':      { color: '#7e22ce', style: 'solid',  label: 'ahos:playsRole (store → memory role)',  rType: 'Relation' },
+  'builtFrom':      { color: '#1f2937', style: 'solid',  label: 'ahos:builtFrom (entity → repo)',        rType: 'Relation' },
+  'hostedBy':       { color: '#1f2937', style: 'dashed', label: 'ahos:hostedBy (capability → repo, source of truth)', rType: 'Relation' },
+  'syncedTo':       { color: '#14b8a6', style: 'dashed', label: 'ahos:syncedTo (capability → deployment target)', rType: 'Flow' },
+  'surface':        { color: '#6b7280', style: 'solid',  label: 'ahos:surface (capability → environment)', rType: 'Relation' },
+  // Tier 1: substrate reality
+  'livesIn':        { color: '#0369a1', style: 'solid',  label: 'ahos:livesIn (store → external system)', rType: 'Hierarchy' },
+  'derivedFrom':    { color: '#9333ea', style: 'solid',  label: 'prov:wasDerivedFrom (adopted #226; was ahos:derivedFrom)', rType: 'Flow' },
+  // Externally-adopted edge vocabulary (ADR-033 train, #223-#232) — kept in sync with ahOntology.ttl (#228)
+  'subjectOf':      { color: '#be185d', style: 'solid',  label: 'schema:subjectOf (adopted #223)',        rType: 'Relation' },
+  'references':     { color: '#a16207', style: 'solid',  label: 'dcterms:references (adopted #227)',      rType: 'Relation' },
+  'isReferencedBy': { color: '#a16207', style: 'dashed', label: 'dcterms:isReferencedBy (adopted #227)',  rType: 'Relation' },
+  'currentProject': { color: '#3f6212', style: 'solid',  label: 'foaf:currentProject (adopted #229)',     rType: 'Relation' },
+  'broader':        { color: '#0891b2', style: 'solid',  label: 'skos:broader (adopted #232; child Area → parent)', rType: 'Hierarchy' },
+  'narrower':       { color: '#0891b2', style: 'dashed', label: 'skos:narrower (adopted #232; parent Area → child)', rType: 'Hierarchy' },
+  'lifecycleStage': { color: '#0e7490', style: 'dotted', label: 'ahos:lifecycleStage',                    rType: 'Hierarchy' },
+  'inLayer':        { color: '#52525b', style: 'dashed', label: 'ahos:inLayer (class → ArchLayer)',       rType: 'Relation' },
+  // Tier 3
+  'memberOf':       { color: '#3f6212', style: 'solid',  label: 'ahos:memberOf (person → team)',          rType: 'Hierarchy' },
+  'contentSubtype': { color: '#9333ea', style: 'dotted', label: 'ahos:contentSubtype',                    rType: 'Hierarchy' },
+  'sendsVia':       { color: '#a16207', style: 'solid',  label: 'ahos:sendsVia (send-tool → channel)',    rType: 'Flow' },
+  'bindingScope':   { color: '#a21caf', style: 'dashed', label: 'ahos:bindingScope (→ domain)',           rType: 'Relation' },
+  'bindingTiming':  { color: '#a21caf', style: 'dotted', label: 'ahos:bindingTiming',                     rType: 'Relation' },
+  'resolvesTo':     { color: '#a21caf', style: 'solid',  label: 'ahos:resolvesTo',                        rType: 'Relation' },
+  // Tier 4
+  'tier':           { color: '#a16207', style: 'solid',  label: 'ahos:tier',                              rType: 'Hierarchy' },
+  'duringPeriod':   { color: '#0f766e', style: 'dashed', label: 'ahos:duringPeriod',                      rType: 'Relation' },
+  'decides':        { color: '#374151', style: 'solid',  label: 'ahos:decides (ADR → topic)',             rType: 'Relation' },
+  // Ontology-self-documentation
+  'realises':       { color: '#0d9488', style: 'solid',  label: 'ahos:realises (system → requirement)',   rType: 'Relation' },
+  'tensionWith':    { color: '#dc2626', style: 'dashed', label: 'ahos:tensionWith (contradiction edges)', rType: 'Relation' },
+  'resolvedBy':     { color: '#16a34a', style: 'solid',  label: 'ahos:resolvedBy',                        rType: 'Relation' },
+  // External metadata (Schema.org, etc.) — drawn thin so they don't dominate the canvas
+  'schema:license': { color: '#9ca3af', style: 'dotted', label: 'schema:license',                         rType: 'Relation' },
+};
+
+const LEVELS = ['meta', 'ontology', 'instance'];
+const BOXES  = ['TBox', 'ABox'];
+const CONTAINER_ID = '_ahOntology_box';
+
+// ============================================================================
+// TYPE DERIVATION — ordered rules that map an individual's rdf:type set
+// (transitively closed over rdfs:subClassOf) to a visual `t` key in NODE_TYPES.
+// First match wins. Properties first (they share the TBox box but a distinct
+// visual). Classes/Ontology before any individual rule.
+// ============================================================================
+const TYPE_RULES = [
+  { types: ['owl:ObjectProperty', 'owl:DatatypeProperty', 'owl:AnnotationProperty'], result: 'property' },
+  { types: ['owl:Ontology'], result: 'ontology' },
+  { types: ['owl:Class'], result: 'class' },
+  // ahos: typed individuals — ordered most-specific to most-general
+  { types: ['ahos:KnowledgeFramework'], result: 'framework' },
+  { types: ['ahos:Projects'], result: 'project' },
+  { types: ['ahos:Tasks'], result: 'task' },
+  { types: ['ahos:Category'], result: 'category' },
+  { types: ['ahos:Person', 'schema:Person'], result: 'person' },
+  { types: ['ahos:Domain'], result: 'domain' },
+  { types: ['ahos:OperatingSystem'], result: 'os' },
+  { types: ['ahos:NotionDatabase', 'ahos:ArtifactsRegister', 'ahos:Database', 'ahos:Table'], result: 'store' },
+  { types: ['ahos:KnowledgeStore'], result: 'store' },
+  { types: ['ahos:Table'], result: 'table' },
+  { types: ['ahos:KnowledgeRegistry', 'ahos:KnowledgeGraph'], result: 'registry' },
+  { types: ['ahos:CapturePath'], result: 'capturepath' },
+  { types: ['ahos:Product'], result: 'product' },
+  { types: ['ahos:Outcome'], result: 'outcome' },
+  { types: ['ahos:KPI'], result: 'kpi' },
+  { types: ['ahos:PreservationLevel'], result: 'preservation' },
+  { types: ['ahos:KnowledgeTier'], result: 'tier' },
+  { types: ['ahos:Period'], result: 'period' },
+  { types: ['ahos:Status', 'ahos:Surface', 'ahos:RelationType', 'ahos:LifecycleStage', 'ahos:BindingTiming'], result: 'enum' },
+  { types: ['ahos:CodeRepository'], result: 'repo' },
+  { types: ['ahos:SendTool', 'ahos:MCPTool', 'ahos:MCPServer'], result: 'tool' },
+  { types: ['ahos:Skill', 'ahos:AgentCapability', 'ahos:Command', 'ahos:Prompt', 'ahos:Synthesiser', 'ahos:ReadAdapter', 'ahos:Capability'], result: 'capability' },
+  { types: ['ahos:MemoryRole'], result: 'role' },
+  { types: ['ahos:ExternalSystem'], result: 'externalsystem' },
+  { types: ['ahos:Atom', 'ahos:Pointer', 'ahos:Artifact'], result: 'artifact' },
+  { types: ['ahos:Team'], result: 'team' },
+  { types: ['ahos:Channel'], result: 'channel' },
+  { types: ['ahos:Principle'], result: 'principle' },
+  { types: ['ahos:Requirement'], result: 'requirement' },
+  { types: ['ahos:Contradiction'], result: 'contradiction' },
+  { types: ['ahos:OpenQuestion'], result: 'openquestion' },
+  { types: ['ahos:Boundary'], result: 'boundary' },
+  { types: ['ahos:KnownLimitation'], result: 'knownlimitation' },
+  { types: ['ahos:Binding'], result: 'binding' },
+  { types: ['ahos:Decision'], result: 'decision' },
+];
+
+// ============================================================================
+// DATA — populated by loadTTL() at runtime from ./ahOntology.ttl
+// ============================================================================
+let NODES = [];
+let EDGES = [];
+
+// ============================================================================
+// TTL LOADER — fetch + parse with N3.js, derive node/edge data, populate NODES + EDGES
+// ============================================================================
+async function loadTTL() {
+  const response = await fetch('./ahOntology.ttl');
+  if (!response.ok) throw new Error(`HTTP ${response.status} fetching ahOntology.ttl`);
+  const ttlText = await response.text();
+
+  // Synchronous parse. N3.Parser will throw on syntax errors.
+  const parser = new N3.Parser();
+  const quads = parser.parse(ttlText);
+  // N3 v1 stores prefixes on the parser after parse completes
+  const prefixes = parser._prefixes || {};
+
+  // Build reverse-prefix lookup: longest IRI first so longer prefixes win
+  const prefixList = Object.entries(prefixes).sort((a, b) => b[1].length - a[1].length);
+  function shortUri(iri) {
+    for (const [short, full] of prefixList) {
+      if (iri.startsWith(full)) return `${short}:${iri.slice(full.length)}`;
+    }
+    return iri; // unknown namespace — return as-is
+  }
+
+  // Index per-subject triples + a subClassOf graph for transitive closure
+  const subjectTriples = new Map();   // shortSubURI → array of {predicate: shortURI, object: Term}
+  const subClassOf = new Map();        // shortSubURI → Set of shortSuperURI
+  const allURIs = new Set();
+
+  for (const q of quads) {
+    if (q.subject.termType !== 'NamedNode') continue;
+    const sub = shortUri(q.subject.value);
+    const pred = shortUri(q.predicate.value);
+    allURIs.add(sub);
+    if (q.object.termType === 'NamedNode') allURIs.add(shortUri(q.object.value));
+    if (!subjectTriples.has(sub)) subjectTriples.set(sub, []);
+    subjectTriples.get(sub).push({ predicate: pred, object: q.object });
+    if (pred === 'rdfs:subClassOf' && q.object.termType === 'NamedNode') {
+      const sup = shortUri(q.object.value);
+      if (!subClassOf.has(sub)) subClassOf.set(sub, new Set());
+      subClassOf.get(sub).add(sup);
+    }
+  }
+
+  // Transitive closure of types: given a subject's direct rdf:types, walk
+  // rdfs:subClassOf to collect every ancestor type. Lets TYPE_RULES dispatch
+  // on a subclass even when the instance is only typed against the subclass.
+  function expandTypes(directTypes) {
+    const out = new Set(directTypes);
+    const queue = [...directTypes];
+    while (queue.length) {
+      const t = queue.shift();
+      const supers = subClassOf.get(t);
+      if (!supers) continue;
+      for (const s of supers) {
+        if (!out.has(s)) { out.add(s); queue.push(s); }
+      }
+    }
+    return out;
+  }
+
+  function deriveType(rdfTypes, uri) {
+    const isExternal = !uri.startsWith('ahos:');
+    if (isExternal) {
+      // External properties/classes/ontology-nodes still get their `t` so
+      // legends colour correctly.
+      if (rdfTypes.has('owl:ObjectProperty') || rdfTypes.has('owl:DatatypeProperty') || rdfTypes.has('owl:AnnotationProperty')) return 'property';
+      if (rdfTypes.has('owl:Class')) return 'class';
+      if (rdfTypes.has('owl:Ontology')) return 'ontology';
+      // An external individual adopted DIRECT into an ahos: class — e.g.
+      // skos:Concept `a ahos:Category` (ADR-033: exact match, no ahos:
+      // proxy). Falls through to the same TYPE_RULES an ahos:-namespaced
+      // individual would use, so it renders identically to its ahos: peers
+      // (e.g. alongside ahos:Memory, ahos:People as a Category node)
+      // instead of the generic 'external' styling.
+      for (const rule of TYPE_RULES) {
+        if (rule.types.some(t => rdfTypes.has(t))) return rule.result;
+      }
+      return 'external';
+    }
+    for (const rule of TYPE_RULES) {
+      if (rule.types.some(t => rdfTypes.has(t))) return rule.result;
+    }
+    return 'external';
+  }
+
+  function deriveInBox(rdfTypes) {
+    if (rdfTypes.has('owl:Class') || rdfTypes.has('owl:ObjectProperty') ||
+        rdfTypes.has('owl:DatatypeProperty') || rdfTypes.has('owl:AnnotationProperty') ||
+        rdfTypes.has('owl:Ontology')) return 'TBox';
+    return 'ABox';
+  }
+
+  function deriveLevel(rdfTypes, uri) {
+    if (!uri.startsWith('ahos:')) return 'meta';
+    if (rdfTypes.has('owl:Class') || rdfTypes.has('owl:ObjectProperty') ||
+        rdfTypes.has('owl:DatatypeProperty') || rdfTypes.has('owl:AnnotationProperty')) return 'ontology';
+    return 'instance';
+  }
+
+  function literalValue(term) {
+    return term?.termType === 'Literal' ? term.value : undefined;
+  }
+
+  function truncate(s, n) {
+    if (!s) return '';
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
+  // Populate NODES — one per URI mentioned
+  const nodes = [];
+  for (const uri of allURIs) {
+    const triples = subjectTriples.get(uri) || [];
+    const directTypes = triples.filter(t => t.predicate === 'rdf:type' && t.object.termType === 'NamedNode')
+                               .map(t => shortUri(t.object.value));
+    const effectiveTypes = expandTypes(directTypes);
+
+    const labelTriple = triples.find(t => t.predicate === 'rdfs:label');
+    const commentTriple = triples.find(t => t.predicate === 'rdfs:comment');
+    const levelTriple = triples.find(t => t.predicate === 'ahos:level');
+    const inBoxTriple = triples.find(t => t.predicate === 'ahos:inBox');
+
+    const label = literalValue(labelTriple?.object) || uri;
+    const comment = literalValue(commentTriple?.object) || '';
+    const explicitLevel = literalValue(levelTriple?.object);
+    const explicitInBox = literalValue(inBoxTriple?.object);
+
+    const t = deriveType(effectiveTypes, uri);
+    const level = explicitLevel || deriveLevel(effectiveTypes, uri);
+    const inBox = explicitInBox || deriveInBox(effectiveTypes);
+    const n = truncate(comment, 240);
+
+    nodes.push({ d: uri, l: label, t, level, inBox, n });
+  }
+
+  // Populate EDGES — every URI→URI triple whose predicate is in EDGE_TYPES.
+  // Predicate-to-key normalisation: `ahos:foo` → `foo`; everything else keeps its prefix.
+  const edges = [];
+  for (const q of quads) {
+    if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'NamedNode') continue;
+    const predShort = shortUri(q.predicate.value);
+    const key = predShort.startsWith('ahos:') ? predShort.slice(5) : predShort;
+    if (!(key in EDGE_TYPES)) continue;
+    const sub = shortUri(q.subject.value);
+    const obj = shortUri(q.object.value);
+    edges.push([sub, obj, key]);
+  }
+
+  NODES = nodes;
+  EDGES = edges;
+  return { prefixes, nodeCount: nodes.length, edgeCount: edges.length };
+}
+
+// ============================================================================
+// RENDER
+// ============================================================================
+const activeLevels = new Set(LEVELS);
+const activeBoxes  = new Set(BOXES);
+
+function elements() {
+  const els = [];
+  // Flow mode: filter to Flow-type edges + their endpoint nodes (still respecting level/box filters)
+  if (layoutMode === 'flow') {
+    const flowEdges = EDGES.filter(([, , k]) => EDGE_TYPES[k]?.rType === 'Flow');
+    const flowNodeIds = new Set();
+    flowEdges.forEach(([s, t]) => { flowNodeIds.add(s); flowNodeIds.add(t); });
+    els.push({ data: { id: CONTAINER_ID, label: 'ahOntology — Data Flow' }, classes: 'container' });
+    const visibleIds = new Set([CONTAINER_ID]);
+    for (const n of NODES) {
+      if (!flowNodeIds.has(n.d)) continue;
+      if (!activeLevels.has(n.level)) continue;
+      if (!activeBoxes.has(n.inBox))  continue;
+      els.push({ data: { id: n.d, label: n.l, type: n.t, level: n.level, inBox: n.inBox, notes: n.n || '', parent: CONTAINER_ID } });
+      visibleIds.add(n.d);
+    }
+    for (const [s, t, k] of flowEdges) {
+      if (!visibleIds.has(s) || !visibleIds.has(t)) continue;
+      els.push({ data: { id: `${s}__${t}__${k}`, source: s, target: t, type: k } });
+    }
+    return els;
+  }
+  // Default (mindmap / hierarchy): full graph respecting level/box filters
+  els.push({ data: { id: CONTAINER_ID, label: 'ahOntology' }, classes: 'container' });
+  const visibleIds = new Set([CONTAINER_ID]);
+  for (const n of NODES) {
+    if (!activeLevels.has(n.level)) continue;
+    if (!activeBoxes.has(n.inBox))  continue;
+    els.push({ data: { id: n.d, label: n.l, type: n.t, level: n.level, inBox: n.inBox, notes: n.n || '', parent: CONTAINER_ID } });
+    visibleIds.add(n.d);
+  }
+  for (const [s, t, k] of EDGES) {
+    if (!visibleIds.has(s) || !visibleIds.has(t)) continue;
+    els.push({ data: { id: `${s}__${t}__${k}`, source: s, target: t, type: k } });
+  }
+  return els;
+}
+
+function nodeStyle() {
+  const styles = [];
+  for (const [type, conf] of Object.entries(NODE_TYPES)) {
+    const sel = {
+      selector: `node[type = "${type}"]`,
+      style: {
+        'background-color': conf.color,
+        'color': conf.color === '#aaa' || conf.color === '#86c1e0' ? '#222' : '#fff',
+      },
+    };
+    if (type === 'class' || type === 'property' || type === 'external') {
+      sel.style['border-width'] = 2;
+      sel.style['border-style'] = 'dashed';
+      sel.style['border-color'] = '#222';
+      sel.style['font-weight'] = 'bold';
+    }
+    styles.push(sel);
+  }
+  return styles;
+}
+
+function edgeStyle() {
+  const styles = [];
+  for (const [type, conf] of Object.entries(EDGE_TYPES)) {
+    styles.push({
+      selector: `edge[type = "${type}"]`,
+      style: {
+        'line-color': conf.color,
+        'target-arrow-color': conf.color,
+        'line-style': conf.style,
+      },
+    });
+  }
+  return styles;
+}
+
+const LAYOUT_OPTS_MINDMAP = { name: 'cose', idealEdgeLength: 120, nodeOverlap: 25, padding: 30, animate: false, randomize: true, fit: true, gravity: 0.5, nestingFactor: 1.2 };
+
+// Hierarchy roots, in priority order — picks the highest-level visible node as root.
+// owl:Thing → ahos:Entity → frameworks → OS → angus.
+const HIERARCHY_ROOT_CANDIDATES = ['owl:Thing', 'ahos:Entity', 'ahos:work', 'ahos:personal', 'ahos:PARA', 'ahos:WorkTeamOS', 'ahos:ahOS', 'ahos:angus', 'ahos:ahOntology'];
+
+function pickRoots(cy) {
+  const visible = new Set(cy.nodes().map(n => n.id()));
+  const found = HIERARCHY_ROOT_CANDIDATES.filter(id => visible.has(id));
+  if (found.length === 0) return undefined;
+  return cy.nodes().filter(n => found.includes(n.id()));
+}
+
+function layoutOpts(cy, randomize = true) {
+  if (layoutMode === 'mindmap') return { ...LAYOUT_OPTS_MINDMAP, randomize };
+  if (layoutMode === 'flow') {
+    const flowRootCandidates = ['ahos:APIPath', 'ahos:ChatInferredPath', 'ahos:ChatCalledPath', 'ahos:MobileUploadPath', 'ahos:WebUploadPath', 'ahos:ahOS'];
+    const flowRoots = cy.nodes().filter(n => flowRootCandidates.includes(n.id()));
+    return {
+      name: 'breadthfirst',
+      directed: true,
+      roots: flowRoots.length > 0 ? flowRoots : undefined,
+      fit: true,
+      padding: 40,
+      spacingFactor: 1.6,
+      nodeDimensionsIncludeLabels: true,
+      avoidOverlap: true,
+      animate: false,
+    };
+  }
+  const roots = pickRoots(cy);
+  return {
+    name: 'breadthfirst',
+    directed: false,
+    roots: roots,
+    fit: true,
+    padding: 40,
+    spacingFactor: 1.4,
+    nodeDimensionsIncludeLabels: true,
+    avoidOverlap: true,
+    animate: false,
+  };
+}
+
+let layoutMode = 'mindmap';
+
+function init() {
+  const cy = cytoscape({
+    container: document.getElementById('cy'),
+    elements: elements(),
+    minZoom: 0.2,
+    maxZoom: 3,
+    wheelSensitivity: 0.25,
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'label': 'data(label)',
+          'font-size': 11,
+          'text-wrap': 'wrap',
+          'text-max-width': 140,
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'width': 'label',
+          'height': 'label',
+          'padding': '8px',
+          'shape': 'round-rectangle',
+          'border-width': 0,
+        },
+      },
+      ...nodeStyle(),
+      {
+        selector: 'node.container',
+        style: {
+          'background-color': '#f5e6f0',
+          'background-opacity': 0.35,
+          'border-color': '#be185d',
+          'border-width': 2,
+          'border-style': 'solid',
+          'label': 'data(label)',
+          'text-valign': 'top',
+          'text-halign': 'left',
+          'text-margin-x': 12,
+          'text-margin-y': 12,
+          'font-size': 16,
+          'font-weight': 'bold',
+          'color': '#be185d',
+          'padding': '40px',
+          'shape': 'round-rectangle',
+        },
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 1.6,
+          'curve-style': 'bezier',
+          'target-arrow-shape': 'triangle',
+          'arrow-scale': 1,
+          'opacity': 0.75,
+          'label': 'data(type)',
+          'font-size': 8,
+          'color': '#555',
+          'text-background-color': '#fafafa',
+          'text-background-opacity': 0.9,
+          'text-background-padding': 2,
+        },
+      },
+      ...edgeStyle(),
+      { selector: '.faded', style: { 'opacity': 0.12 } },
+      { selector: '.highlight', style: { 'opacity': 1, 'z-index': 99 } },
+      { selector: 'node.highlight', style: { 'border-width': 3, 'border-color': '#000', 'border-style': 'solid' } },
+      { selector: 'node.search-hit', style: { 'border-width': 4, 'border-color': '#f7c948', 'border-style': 'solid' } },
+    ],
+    layout: LAYOUT_OPTS_MINDMAP,
+  });
+
+  cy.on('tap', 'node', evt => {
+    const node = evt.target;
+    if (node.data('id') === CONTAINER_ID) return;
+    cy.elements().addClass('faded').removeClass('highlight');
+    const neighborhood = node.closedNeighborhood();
+    neighborhood.removeClass('faded').addClass('highlight');
+    cy.$(`#${CONTAINER_ID}`).removeClass('faded');
+    showInfo(node.data());
+  });
+  cy.on('tap', evt => {
+    if (evt.target === cy) {
+      cy.elements().removeClass('faded').removeClass('highlight');
+      document.getElementById('node-info').innerHTML = '<h2>Selection</h2><p style="color:#888;">Click a node to inspect.</p>';
+    }
+  });
+
+  document.getElementById('fit').onclick = () => cy.fit(null, 30);
+  document.getElementById('relayout').onclick = () => cy.layout(layoutOpts(cy)).run();
+
+  const layoutToggle = document.getElementById('layout-toggle');
+  layoutToggle.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('active')) return;
+      layoutToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      layoutMode = btn.dataset.layout;
+      cy.elements().remove();
+      cy.add(elements());
+      cy.layout(layoutOpts(cy, false)).run();
+    });
+  });
+
+  document.getElementById('search').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    cy.nodes().removeClass('search-hit');
+    if (!q) return;
+    cy.nodes().filter(n => {
+      if (n.data('id') === CONTAINER_ID) return false;
+      return n.data('label').toLowerCase().includes(q) || n.data('id').toLowerCase().includes(q);
+    }).addClass('search-hit');
+  });
+
+  const levelToggleContainer = document.getElementById('level-toggles');
+  LEVELS.forEach(level => {
+    const label = document.createElement('label');
+    label.className = 'toggle on';
+    label.innerHTML = `<input type="checkbox" checked /> ${level}`;
+    label.querySelector('input').addEventListener('change', e => {
+      label.classList.toggle('on', e.target.checked);
+      if (e.target.checked) activeLevels.add(level); else activeLevels.delete(level);
+      cy.elements().remove();
+      cy.add(elements());
+      cy.layout(layoutOpts(cy, false)).run();
+    });
+    levelToggleContainer.appendChild(label);
+  });
+
+  const boxToggleContainer = document.getElementById('box-toggles');
+  BOXES.forEach(box => {
+    const label = document.createElement('label');
+    label.className = 'toggle on';
+    label.innerHTML = `<input type="checkbox" checked /> ${box}`;
+    label.querySelector('input').addEventListener('change', e => {
+      label.classList.toggle('on', e.target.checked);
+      if (e.target.checked) activeBoxes.add(box); else activeBoxes.delete(box);
+      cy.elements().remove();
+      cy.add(elements());
+      cy.layout(layoutOpts(cy, false)).run();
+    });
+    boxToggleContainer.appendChild(label);
+  });
+
+  const lnodes = document.getElementById('legend-nodes');
+  for (const [, c] of Object.entries(NODE_TYPES)) {
+    const div = document.createElement('div');
+    div.className = 'legend-item';
+    const isTbox = c.label.includes('TBox') || c.label.includes('external');
+    div.innerHTML = `<span class="legend-swatch" style="background:${c.color};${isTbox ? 'border-color:#222;border-style:dashed;border-width:2px;' : ''}"></span><span>${c.label}</span>`;
+    lnodes.appendChild(div);
+  }
+  const ledges = document.getElementById('legend-edges');
+  for (const [, c] of Object.entries(EDGE_TYPES)) {
+    const div = document.createElement('div');
+    div.className = 'legend-item';
+    div.innerHTML = `<span class="legend-line" style="border-top-color:${c.color};border-top-style:${c.style};"></span><span>${c.label}</span>`;
+    ledges.appendChild(div);
+  }
+}
+
+function showInfo(data) {
+  const el = document.getElementById('node-info');
+  const type = NODE_TYPES[data.type] || {};
+  el.innerHTML = `
+    <h2>Selection</h2>
+    <div>
+      <span class="badge" style="background:${type.color || '#eee'};color:${type.color === '#aaa' || type.color === '#86c1e0' ? '#222' : '#fff'};">${type.label || data.type}</span>
+      <span class="badge" style="background:#be185d;color:#fff;">level: ${data.level || '—'}</span>
+      <span class="badge" style="background:#444;color:#fff;">box: ${data.inBox || '—'}</span>
+    </div>
+    <div class="label">${escapeHtml(data.label)}</div>
+    <div class="id">${data.id}</div>
+    ${data.notes ? `<p>${escapeHtml(data.notes)}</p>` : ''}
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ============================================================================
+// BOOT: load TTL, then render. On fetch failure (likely file:// CORS), show
+// instructive overlay with the local-server one-liner.
+// ============================================================================
+async function boot() {
+  const overlay = document.getElementById('loader-overlay');
+  try {
+    const summary = await loadTTL();
+    overlay.remove();
+    init();
+    console.log(`[ahOntology] Parsed ${summary.nodeCount} nodes, ${summary.edgeCount} edges from ahOntology.ttl`);
+  } catch (err) {
+    console.error(err);
+    overlay.classList.add('error');
+    const isFileScheme = window.location.protocol === 'file:';
+    overlay.querySelector('.panel').innerHTML = isFileScheme
+      ? `
+        <h2>Browser blocked fetch from <code>file://</code></h2>
+        <p>This viewer parses <code>ahOntology.ttl</code> at runtime, but Chrome/Safari/Firefox block <code>fetch()</code> on local files for security.</p>
+        <p>From a terminal in this directory, run:</p>
+        <pre>cd ${escapeHtml(window.location.pathname.replace(/[^/]+$/, ''))}
+python3 -m http.server 8000</pre>
+        <p>Then open <code>http://localhost:8000/ahOntology.html</code>.</p>
+        <p class="hint">Underlying error: <code>${escapeHtml(String(err.message || err))}</code></p>
+      `
+      : `
+        <h2>Failed to load ahOntology.ttl</h2>
+        <p>${escapeHtml(String(err.message || err))}</p>
+        <p class="hint">Check that <code>ahOntology.ttl</code> sits next to this file and is readable.</p>
+      `;
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+</script>
+</body>
+</html>

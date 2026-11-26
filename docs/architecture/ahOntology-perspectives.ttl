@@ -1,0 +1,182 @@
+@prefix ahos:   <http://example.com/ahos-ontology#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov:   <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# =====================================================================
+# NAVIGATION PERSPECTIVES
+# =====================================================================
+# This file extends ahOntology.ttl with semantics for graph rendering.
+#
+# Design decision:
+#   Visualisation is not treated as a disposable UI concern. In ahOS, graph
+#   visualisation is part of how the ontology becomes intelligible to a human.
+#   Therefore, rendering logic that expresses durable navigation meaning should
+#   travel with the ontology itself.
+#
+# Core idea:
+#   There is no single absolute centre of the graph. A graph centre only makes
+#   sense relative to a question, task, or mode of interpretation. A
+#   NavigationPerspective declares that context and names the node that should
+#   act as the initial focus when rendering from that perspective.
+#
+# Examples:
+#   - OntologyPerspective starts at ahos:ahOntology.
+#   - SystemPerspective starts at ahos:ahOS.
+#   - PersonalPerspective starts at ahos:angus.
+#   - KnowledgePerspective starts at ahos:knowledgeGraph.
+#   - OperationalPerspective starts at ahos:ahkmsMCPServer.
+
+# =====================================================================
+# CLASSES
+# =====================================================================
+
+ahos:NavigationPerspective a owl:Class ;
+    rdfs:subClassOf ahos:Entity ;
+    rdfs:label "Navigation Perspective" ;
+    rdfs:comment "A durable graph-viewing perspective: a human-meaningful way to enter and navigate the same underlying ontology. A perspective defines the question-relative centre of the graph without changing the RDF type of the focus node. For example, ahos:ahOS remains an instance of ahos:OperatingSystem, but can still be the focus node for the System Perspective." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:GraphRenderingRule a owl:Class ;
+    rdfs:subClassOf ahos:Entity ;
+    rdfs:label "Graph Rendering Rule" ;
+    rdfs:comment "A semantic rule that guides how the ontology should be rendered. These are not arbitrary frontend preferences; they encode durable interpretation behaviour that should travel with the ontology." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+# =====================================================================
+# PROPERTIES
+# =====================================================================
+
+ahos:focusesOn a owl:ObjectProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  ahos:Entity ;
+    rdfs:label "focuses on" ;
+    rdfs:comment "The node that should act as the initial centre / entry point for a NavigationPerspective. This is a rendering-semantic relation, not a claim that the focus node is ontologically meta or more real than other nodes." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:answersQuestion a owl:DatatypeProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  xsd:string ;
+    rdfs:label "answers question" ;
+    rdfs:comment "Plain-language question this perspective is optimised to answer. Used by humans and agents to select the right graph view." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:defaultHopDepth a owl:DatatypeProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  xsd:integer ;
+    rdfs:label "default hop depth" ;
+    rdfs:comment "Suggested number of relationship hops to render initially from the focus node. The viewer may override this, but the ontology provides a default." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:prioritisesRelation a owl:ObjectProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  owl:ObjectProperty ;
+    rdfs:label "prioritises relation" ;
+    rdfs:comment "Relationship types that should be emphasised first when rendering a perspective. This gives graph navigation a semantic default rather than leaving it entirely to layout heuristics." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:deprioritisesRelation a owl:ObjectProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  owl:ObjectProperty ;
+    rdfs:label "deprioritises relation" ;
+    rdfs:comment "Relationship types that are valid but should be visually softened, collapsed, or hidden by default for this perspective." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+ahos:usesRenderingRule a owl:ObjectProperty ;
+    rdfs:domain ahos:NavigationPerspective ;
+    rdfs:range  ahos:GraphRenderingRule ;
+    rdfs:label "uses rendering rule" ;
+    rdfs:comment "Links a NavigationPerspective to a semantic rendering rule that the graph viewer should apply." ;
+    ahos:level "ontology" ;
+    ahos:inBox "TBox" .
+
+# =====================================================================
+# RENDERING RULES
+# =====================================================================
+
+ahos:RenderFocusAsHub a ahos:GraphRenderingRule ;
+    rdfs:label "Render focus as hub" ;
+    rdfs:comment "When a perspective focuses on a node, render that focus node as the visual hub: centre it, emphasise it, expand its first-degree neighbours, and avoid collapsing it away. This does not change the focus node's RDF type." ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:ShowFirstDegreeNeighbours a ahos:GraphRenderingRule ;
+    rdfs:label "Show first-degree neighbours" ;
+    rdfs:comment "Render the focus node's direct neighbours by default so the user can immediately understand the local structure around the selected perspective." ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:CollapseLowPriorityRelations a ahos:GraphRenderingRule ;
+    rdfs:label "Collapse low-priority relations" ;
+    rdfs:comment "Valid relationships that are not central to the selected perspective may be collapsed, hidden, or visually de-emphasised until expanded by the user." ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+# =====================================================================
+# PERSPECTIVES
+# =====================================================================
+
+ahos:OntologyPerspective a ahos:NavigationPerspective ;
+    rdfs:label "Ontology Perspective" ;
+    rdfs:comment "Perspective for understanding how the ontology itself is designed: classes, properties, principles, decisions, boundaries, limitations, and modelling choices." ;
+    ahos:focusesOn ahos:ahOntology ;
+    ahos:answersQuestion "How is the ontology itself designed?" ;
+    ahos:defaultHopDepth 2 ;
+    ahos:prioritisesRelation rdfs:subClassOf, ahos:describes, ahos:about, ahos:decides, ahos:resolvedBy ;
+    ahos:usesRenderingRule ahos:RenderFocusAsHub, ahos:ShowFirstDegreeNeighbours, ahos:CollapseLowPriorityRelations ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:SystemPerspective a ahos:NavigationPerspective ;
+    rdfs:label "System Perspective" ;
+    rdfs:comment "Perspective for understanding ahOS as the operating system / product / vision: its frameworks, domains, stores, skills, products, outcomes, and capabilities." ;
+    ahos:focusesOn ahos:ahOS ;
+    ahos:answersQuestion "How does ahOS work as a system?" ;
+    ahos:defaultHopDepth 2 ;
+    ahos:prioritisesRelation ahos:hasOutcome, ahos:produces, ahos:builtFrom, ahos:uses, ahos:hasCategory, ahos:realises ;
+    ahos:usesRenderingRule ahos:RenderFocusAsHub, ahos:ShowFirstDegreeNeighbours, ahos:CollapseLowPriorityRelations ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:PersonalPerspective a ahos:NavigationPerspective ;
+    rdfs:label "Personal Perspective" ;
+    rdfs:comment "Perspective for navigating the graph from Angus as the person/user: personal domains, relationships, projects, people, memories, and user-centred outcomes." ;
+    ahos:focusesOn ahos:angus ;
+    ahos:answersQuestion "What matters to Angus?" ;
+    ahos:defaultHopDepth 2 ;
+    ahos:prioritisesRelation dcterms:creator, ahos:memberOf, ahos:hasDomain, ahos:producesFor, ahos:partOf ;
+    ahos:usesRenderingRule ahos:RenderFocusAsHub, ahos:ShowFirstDegreeNeighbours, ahos:CollapseLowPriorityRelations ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:KnowledgePerspective a ahos:NavigationPerspective ;
+    rdfs:label "Knowledge Perspective" ;
+    rdfs:comment "Perspective for understanding where knowledge lives and how it moves: artifacts, entities, relationships, state docs, registers, lineage, and retrieval paths." ;
+    ahos:focusesOn ahos:knowledgeGraph ;
+    ahos:answersQuestion "Where does knowledge live and how is it connected?" ;
+    ahos:defaultHopDepth 2 ;
+    ahos:prioritisesRelation ahos:readsFrom, ahos:writesTo, prov:wasDerivedFrom, ahos:playsRole, ahos:partOf, ahos:realises ;
+    ahos:usesRenderingRule ahos:RenderFocusAsHub, ahos:ShowFirstDegreeNeighbours, ahos:CollapseLowPriorityRelations ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .
+
+ahos:OperationalPerspective a ahos:NavigationPerspective ;
+    rdfs:label "Operational Perspective" ;
+    rdfs:comment "Perspective for understanding execution: MCP servers, tools, skills, surfaces, external systems, bindings, and capability invocation paths." ;
+    ahos:focusesOn ahos:ahkmsMCPServer ;
+    ahos:answersQuestion "How does execution happen?" ;
+    ahos:defaultHopDepth 2 ;
+    ahos:prioritisesRelation ahos:exposes, ahos:invokes, ahos:surface, ahos:hostedBy, ahos:syncedTo, ahos:sendsVia, ahos:resolvesTo ;
+    ahos:usesRenderingRule ahos:RenderFocusAsHub, ahos:ShowFirstDegreeNeighbours, ahos:CollapseLowPriorityRelations ;
+    ahos:level "instance" ;
+    ahos:inBox "ABox" .

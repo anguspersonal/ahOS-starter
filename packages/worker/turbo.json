@@ -1,0 +1,44 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  // Cache-key repair for #718 — packages/mcp-server/turbo.json carries the
+  // full account. Same rule: a test that reads outside this package must name
+  // what it reads, or turbo replays a green computed against the previous
+  // version of that file.
+  //
+  // Overriding `inputs` here MERGES with the root task, so `dependsOn` is
+  // still inherited (`^build` for test:unit, `build` for test).
+  //
+  // See AGENTS.md "Turborepo cache keys" and #729.
+  "tasks": {
+    "test:unit": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        // check-migration-signatures.test.ts — "sync guard: the REAL committed
+        // migrations dir passes the lint". The guard script is in-package, but
+        // the MIGRATIONS_DIR it scans is not.
+        "../../supabase/migrations/**",
+        // check-migration-drift.test.ts reads SHARED_ENTITIES_SOURCE straight
+        // off disk. Today the @ahkms/shared dependency plus `^build` happens
+        // to cover it; declared explicitly so the key does not rest on that
+        // dependency continuing to exist.
+        "../../packages/shared/src/types/entities.ts",
+        // check-migration-comments.test.ts — added after #718 closed, so this
+        // key had gone stale again exactly the way #729 describes, until
+        // scripts/check-turbo-inputs.js caught it. The guard script requires
+        // scripts/lib/range.js (base-ref resolution shared with the ADR/docs
+        // guards) by relative path.
+        "../../scripts/lib/**"
+      ]
+    },
+    // `test` runs the same jest suites (plus integration), so the same key.
+    "test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../supabase/migrations/**",
+        "../../packages/shared/src/types/entities.ts",
+        "../../scripts/lib/**"
+      ]
+    }
+  }
+}

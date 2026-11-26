@@ -1,0 +1,5 @@
+# Legacy MCP tools in packages/mcp-server/src/server.ts.
+# This list may only shrink as tools are migrated to Centralised Action Registry (CAR) actions.
+# Adding a line requires explicit review:architect sign-off.
+# See issue #1338, ADR-100, and packages/mcp-server/src/__tests__/legacyToolSurface.test.ts.
+ingest_enrich_next

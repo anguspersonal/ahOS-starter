@@ -1,0 +1,97 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  // Cache-key repair for #718.
+  //
+  // turbo hashes a task's own package directory. Several suites here assert
+  // against REPO-ROOT trees, so before this file a `.claude/skills/**` edit
+  // left the hash unchanged and turbo replayed a green computed before the
+  // edit ("4 cached, 4 total >>> FULL TURBO"). The tests never ran; the pass
+  // described the previous tree.
+  //
+  // Every path below is a file some test in this package actually reads.
+  // `$TURBO_DEFAULT$` keeps the normal package-directory inputs; the rest is
+  // only the escape.
+  //
+  // Overriding `inputs` in a package configuration MERGES with the root task,
+  // so `dependsOn: ["^build"]` is still inherited — do not restate it, and do
+  // not move these to a root-level `@ahkms/mcp-server#test:unit` entry, which
+  // REPLACES the root definition and would silently drop `^build`.
+  //
+  // Adding a suite that reads outside this package means adding it here.
+  // See AGENTS.md "Turborepo cache keys" and #729.
+  "tasks": {
+    "test:unit": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        // checkSkillBodies.test.ts / checkSkillHome.test.ts — guards under test,
+        // plus the committed tree, hooks, and receipts they check (#689, #811).
+        "../../scripts/check-skill-bodies.js",
+        "../../.claude/skill-registry.json",
+        "../../.claude/skills/**",
+        "../../.claude/hooks/check-skill-home.js",
+        // checkUserIdReads.test.ts / checkArtifactSurfaceWrites.test.ts both
+        // `require` the root guard and then scan the whole packages/ tree
+        // ("the committed packages/ tree passes the guard"), so a violation
+        // introduced in web or worker has to invalidate this suite.
+        "../../scripts/check-user-id-reads.js",
+        "../../scripts/check-artifact-surface-writes.js",
+        // checkAdrCitations.test.ts / setCommitIdentity.test.ts — added after
+        // #718 closed, so this key had gone stale again exactly the way #729
+        // describes, until scripts/check-turbo-inputs.js caught it.
+        "../../scripts/check-adr-citations.js",
+        "../../scripts/set-commit-identity.js",
+        "../../scripts/check-commit-authorship.js",
+        "../../scripts/lib/**",
+        "../../packages/**/*.ts",
+        "../../packages/**/*.tsx",
+        // An explicit glob bypasses .gitignore (unlike $TURBO_DEFAULT$), so
+        // without these the key swallows ~2,300 node_modules .d.ts files.
+        // Mirrors SKIP_DIRS in both guard scripts — keep them in step.
+        "!../../packages/**/node_modules/**",
+        "!../../packages/**/dist/**",
+        "!../../packages/**/build/**",
+        "!../../packages/**/coverage/**",
+        "!../../packages/**/.next/**",
+        "!../../packages/**/.turbo/**",
+        // termNodesMigration / namespacesMigration / dosConfigMigration read
+        // the committed SQL for migrations 078, 081 and 087/088.
+        "../../supabase/migrations/**",
+        // workerRouteSurface.test.ts reads worker's app.js and route-surface.json (#1513).
+        "../../packages/worker/app.js",
+        "../../packages/worker/routes/**",
+        "../../packages/worker/route-surface.json"
+      ]
+    },
+    // `test` is an alias for `test:unit` in this package's package.json, so it
+    // reads the same files and needs the same key. Deliberately a verbatim
+    // copy of the list above — JSON cannot share it, so keep the two in step
+    // and read the annotations there.
+    "test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../scripts/check-skill-bodies.js",
+        "../../.claude/skill-registry.json",
+        "../../.claude/skills/**",
+        "../../scripts/check-user-id-reads.js",
+        "../../scripts/check-artifact-surface-writes.js",
+        "../../scripts/check-adr-citations.js",
+        "../../scripts/set-commit-identity.js",
+        "../../scripts/check-commit-authorship.js",
+        "../../scripts/lib/**",
+        "../../packages/**/*.ts",
+        "../../packages/**/*.tsx",
+        "!../../packages/**/node_modules/**",
+        "!../../packages/**/dist/**",
+        "!../../packages/**/build/**",
+        "!../../packages/**/coverage/**",
+        "!../../packages/**/.next/**",
+        "!../../packages/**/.turbo/**",
+        "../../supabase/migrations/**",
+        "../../packages/worker/app.js",
+        "../../packages/worker/routes/**",
+        "../../packages/worker/route-surface.json"
+      ]
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  // A task's cache key covers its OWN package directory. Suites that assert
+  // against repo-root trees (.claude/, supabase/migrations/, scripts/) must
+  // therefore declare those paths as inputs, or turbo replays a green computed
+  // before the edit — #718.
+  //
+  // Those declarations live in the package configurations that need them
+  // (packages/mcp-server/turbo.json, packages/worker/turbo.json), not on the
+  // tasks below: a task-level `inputs` here applies to EVERY package, and most
+  // have no business depending on .claude/.
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"],
+      "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "OPENAI_API_KEY"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}
+

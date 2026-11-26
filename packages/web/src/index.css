@@ -1,0 +1,306 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* ==========================================================================
+   Cross-Web Day / Night Theme Support
+   - Day Mode (Default): Pale background (#f8fafc), clean white cards (#ffffff),
+     default text black/dark charcoal (#0f172a) NOT white, light borders (#e2e8f0).
+   - Night Mode: Deep Midnight / OLED Pitch Black void (#000000), dark cards,
+     white/light text (#f8fafc / #e2e8f0), dark borders.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Day Mode (Default Theme): Pale background, black/dark default text
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="day"],
+.theme-day {
+  color-scheme: light;
+}
+
+[data-theme="day"] body,
+.theme-day body,
+[data-theme="day"] .bg-slate-950,
+.theme-day .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="day"] .bg-slate-900,
+.theme-day .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+[data-theme="day"] .bg-slate-900\/60,
+.theme-day .bg-slate-900\/60,
+[data-theme="day"] .bg-slate-900\/80,
+.theme-day .bg-slate-900\/80,
+[data-theme="day"] .bg-slate-900\/90,
+.theme-day .bg-slate-900\/90,
+[data-theme="day"] .bg-slate-900\/95,
+.theme-day .bg-slate-900\/95,
+[data-theme="day"] .bg-slate-900\/50,
+.theme-day .bg-slate-900\/50 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+[data-theme="day"] .bg-slate-800,
+.theme-day .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="day"] .bg-slate-800\/80,
+.theme-day .bg-slate-800\/80,
+[data-theme="day"] .bg-slate-800\/60,
+.theme-day .bg-slate-800\/60,
+[data-theme="day"] .bg-slate-800\/50,
+.theme-day .bg-slate-800\/50 {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
+[data-theme="day"] .bg-slate-950\/60,
+.theme-day .bg-slate-950\/60,
+[data-theme="day"] .bg-slate-950\/70,
+.theme-day .bg-slate-950\/70 {
+  background-color: rgba(248, 250, 252, 0.92) !important;
+}
+
+/* Day Mode Text: Default text black not white */
+[data-theme="day"] body,
+.theme-day body,
+[data-theme="day"] .text-white,
+.theme-day .text-white,
+[data-theme="day"] .text-slate-100,
+.theme-day .text-slate-100,
+[data-theme="day"] .text-slate-200,
+.theme-day .text-slate-200 {
+  color: #0f172a !important; /* Deep black/slate-900 */
+}
+
+[data-theme="day"] .text-slate-300,
+.theme-day .text-slate-300 {
+  color: #1e293b !important; /* Dark slate-800 */
+}
+
+[data-theme="day"] .text-slate-400,
+.theme-day .text-slate-400 {
+  color: #475569 !important; /* Muted slate-600 */
+}
+
+[data-theme="day"] .text-slate-500,
+.theme-day .text-slate-500 {
+  color: #64748b !important; /* Secondary slate-500 */
+}
+
+/* Retain high-contrast white text on solid colored action buttons */
+[data-theme="day"] .bg-indigo-600,
+.theme-day .bg-indigo-600,
+[data-theme="day"] .bg-indigo-600 .text-white,
+.theme-day .bg-indigo-600 .text-white,
+[data-theme="day"] .bg-indigo-600.text-white,
+.theme-day .bg-indigo-600.text-white,
+[data-theme="day"] .bg-rose-600,
+.theme-day .bg-rose-600,
+[data-theme="day"] .bg-rose-600 .text-white,
+.theme-day .bg-rose-600 .text-white,
+[data-theme="day"] .bg-rose-600.text-white,
+.theme-day .bg-rose-600.text-white,
+[data-theme="day"] .bg-emerald-600,
+.theme-day .bg-emerald-600,
+[data-theme="day"] .bg-emerald-600 .text-white,
+.theme-day .bg-emerald-600 .text-white,
+[data-theme="day"] .bg-emerald-600.text-white,
+.theme-day .bg-emerald-600.text-white {
+  color: #ffffff !important;
+}
+
+/* Day Mode Borders */
+[data-theme="day"] .border-slate-800,
+.theme-day .border-slate-800,
+[data-theme="day"] .border-slate-800\/80,
+.theme-day .border-slate-800\/80,
+[data-theme="day"] .border-slate-800\/60,
+.theme-day .border-slate-800\/60,
+[data-theme="day"] .border-slate-800\/50,
+.theme-day .border-slate-800\/50 {
+  border-color: #e2e8f0 !important; /* Clean slate-200 border */
+}
+
+[data-theme="day"] .border-slate-700,
+.theme-day .border-slate-700,
+[data-theme="day"] .border-slate-700\/80,
+.theme-day .border-slate-700\/80,
+[data-theme="day"] .border-slate-700\/60,
+.theme-day .border-slate-700\/60,
+[data-theme="day"] .border-slate-700\/50,
+.theme-day .border-slate-700\/50 {
+  border-color: #cbd5e1 !important; /* Subtle slate-300 border */
+}
+
+/* Day Mode Form Inputs, Textareas & Selects */
+[data-theme="day"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.bg-transparent),
+.theme-day input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.bg-transparent),
+[data-theme="day"] textarea:not(.bg-transparent),
+.theme-day textarea:not(.bg-transparent),
+[data-theme="day"] select,
+.theme-day select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="day"] input::placeholder,
+.theme-day input::placeholder,
+[data-theme="day"] textarea::placeholder,
+.theme-day textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Day Mode Preformatted Blocks */
+[data-theme="day"] pre,
+.theme-day pre {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Day Mode Hover States */
+[data-theme="day"] .hover\:bg-slate-800:hover,
+.theme-day .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+[data-theme="day"] .hover\:bg-slate-700:hover,
+.theme-day .hover\:bg-slate-700:hover {
+  background-color: #cbd5e1 !important;
+}
+
+[data-theme="day"] .hover\:text-white:hover,
+.theme-day .hover\:text-white:hover {
+  color: #000000 !important;
+}
+
+[data-theme="day"] .hover\:text-slate-200:hover,
+.theme-day .hover\:text-slate-200:hover {
+  color: #0f172a !important;
+}
+
+/* Day Mode Canvas Radial Dot Pattern */
+[data-theme="day"] .bg-\[radial-gradient\(\#1e293b_1px\,transparent_1px\)\],
+.theme-day .bg-\[radial-gradient\(\#1e293b_1px\,transparent_1px\)\] {
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Night Mode: Deep Midnight / OLED Pitch Black void (#000000)
+   -------------------------------------------------------------------------- */
+[data-theme="night"],
+.theme-night {
+  color-scheme: dark;
+}
+
+[data-theme="night"] body,
+.theme-night body,
+[data-theme="night"] .bg-slate-950,
+.theme-night .bg-slate-950 {
+  background-color: #000000 !important;
+}
+
+[data-theme="night"] .bg-slate-900,
+.theme-night .bg-slate-900 {
+  background-color: #06060a !important;
+}
+
+[data-theme="night"] .bg-slate-900\/60,
+.theme-night .bg-slate-900\/60,
+[data-theme="night"] .bg-slate-900\/80,
+.theme-night .bg-slate-900\/80,
+[data-theme="night"] .bg-slate-900\/90,
+.theme-night .bg-slate-900\/90,
+[data-theme="night"] .bg-slate-900\/95,
+.theme-night .bg-slate-900\/95,
+[data-theme="night"] .bg-slate-900\/50,
+.theme-night .bg-slate-900\/50 {
+  background-color: rgba(6, 6, 10, 0.92) !important;
+}
+
+[data-theme="night"] .bg-slate-800,
+.theme-night .bg-slate-800 {
+  background-color: #0e0e16 !important;
+}
+
+[data-theme="night"] .bg-slate-800\/80,
+.theme-night .bg-slate-800\/80,
+[data-theme="night"] .bg-slate-800\/60,
+.theme-night .bg-slate-800\/60,
+[data-theme="night"] .bg-slate-800\/50,
+.theme-night .bg-slate-800\/50 {
+  background-color: rgba(14, 14, 22, 0.85) !important;
+}
+
+[data-theme="night"] .bg-slate-950\/60,
+.theme-night .bg-slate-950\/60,
+[data-theme="night"] .bg-slate-950\/70,
+.theme-night .bg-slate-950\/70 {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+[data-theme="night"] .border-slate-800,
+.theme-night .border-slate-800,
+[data-theme="night"] .border-slate-800\/80,
+.theme-night .border-slate-800\/80,
+[data-theme="night"] .border-slate-800\/60,
+.theme-night .border-slate-800\/60,
+[data-theme="night"] .border-slate-800\/50,
+.theme-night .border-slate-800\/50,
+[data-theme="night"] .border-slate-700,
+.theme-night .border-slate-700,
+[data-theme="night"] .border-slate-700\/80,
+.theme-night .border-slate-700\/80,
+[data-theme="night"] .border-slate-700\/60,
+.theme-night .border-slate-700\/60,
+[data-theme="night"] .border-slate-700\/50,
+.theme-night .border-slate-700\/50 {
+  border-color: rgba(255, 255, 255, 0.09) !important;
+}
+
+[data-theme="night"] .hover\:bg-slate-800:hover,
+.theme-night .hover\:bg-slate-800:hover {
+  background-color: #151522 !important;
+}
+
+[data-theme="night"] .hover\:bg-slate-700:hover,
+.theme-night .hover\:bg-slate-700:hover {
+  background-color: #1e1e30 !important;
+}
+
+[data-theme="night"] .bg-\[radial-gradient\(\#1e293b_1px\,transparent_1px\)\],
+.theme-night .bg-\[radial-gradient\(\#1e293b_1px\,transparent_1px\)\] {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Job Hunt Tracker Chart Series Tokens (ADR-120, validated Day/Night palette)
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="day"],
+.theme-day {
+  --jh-series-interview: #c9532e;
+  --jh-series-rejected: #00846f;
+  --jh-series-silent: #8f7fe0;
+}
+
+[data-theme="night"],
+.theme-night {
+  --jh-series-interview: #d4643a;
+  --jh-series-rejected: #00978a;
+  --jh-series-silent: #887ce0;
+}

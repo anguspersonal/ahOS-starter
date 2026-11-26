@@ -1,0 +1,2 @@
+# Prevent host dist from overwriting the image's built dist (worker is built inside Docker)
+packages/worker/dist

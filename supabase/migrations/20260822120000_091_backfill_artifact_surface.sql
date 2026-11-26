@@ -1,0 +1,212 @@
+-- Migration 091: backfill artifacts.surface for every remaining null-surface row (#584)
+-- ADR: ADR-026 (rationalised provenance & derived trust), ADR-046 §2/§3
+--      (per-source ingestion policy — envelope metadata, role ladder)
+-- Issue: #584 (drive_import_file and capture.ts's default_surface can still write a
+--        null artifacts.surface). Follows #570 / migration 083, which fixed the Drive
+--        discover path only.
+-- Date: 2026-08-22
+--
+-- WHAT A RE-RUN DOES: nothing. The only predicate is `surface IS NULL`, and every
+-- branch of the CASE writes a non-null value, so the second run matches zero rows.
+-- There is no state to detect and therefore no guard to get wrong.
+--
+--
+-- WHY
+-- `artifacts.surface` is what BOTH read-time derivations key on: ADR-026's trust
+-- derivation (resolveTrust) and ADR-046 §3's synthesis role ladder
+-- (resolveSynthesisRole), which stores ONE role PER SURFACE. A null surface is not a
+-- row classified wrongly — it is a row that CANNOT BE ADDRESSED. Both resolvers fall
+-- back to source_channel and then to a bare default, so the row still resolves; it
+-- just resolves to whatever the default happens to be, and no `surface_role_map` /
+-- `surface_trust_map` entry the owner writes can ever reach it, because there is no
+-- key to write the entry against. The owner cannot demote a path they cannot name.
+-- That is the shape that let a decade of personal-archive Drive PDFs flood the
+-- day-window synthesis read (#567).
+--
+-- The companion code change in this PR closes every write path that could still
+-- produce one, except createTask.ts (concurrent work under #653 — see
+-- scripts/check-artifact-surface-writes.js, which counts the remaining gap). This
+-- file is the one-time backfill for rows written before that change.
+--
+--
+-- SCOPE — MEASURED, NOT ESTIMATED (read-only production scan, 2026-08-22)
+--   153,112 artifacts rows total, of which 219 have surface IS NULL:
+--
+--     102  source_channel = 'web_upload'   (96 source='web_upload', 6 source='n8n_upload')
+--      84  source_channel = 'mcp'          (capture.ts, source is 'mcp' or a URL)
+--      28  source_channel IS NULL          (15 task_request, 1 event_request,
+--                                           8 source='n8n_upload', 4 with nothing at all)
+--       3  source_channel = 'derived'
+--       1  source_channel = 'gdrive'       (a retired Drive path; nothing writes it today)
+--       1  source_channel = 'other'        (source='rich-text-editor', Nov 2025)
+--
+--   Note what is ABSENT: zero rows with source_channel = 'google-drive'. The
+--   drive_import_file path named in #584's title has never written to production at
+--   all, so its fix is purely preventive and it has nothing to backfill.
+--
+--
+-- WHY A CASE AND NOT 083'S `surface = source_channel`
+-- 083 could use a bare field-copy because it addressed one write path whose channel
+-- WAS its surface. Here the fixed writers do not all stamp their channel: the worker
+-- upload path stamps `web_app` (not its channel `web_upload`), and capture stamps the
+-- `api` floor (not its channel `mcp`). A field-copy would therefore mint a SECOND name
+-- for each of those paths — the owner would have to configure `web_upload` for history
+-- and `web_app` for everything written from now on, and the two would silently drift
+-- apart. Every arm below maps to exactly the value the corresponding writer now
+-- produces, so history and future rows share one key. That is the whole point of the
+-- exercise: one addressable name per path.
+--
+-- ARM BY ARM, in the order they are evaluated (order is load-bearing — the n8n arm
+-- must precede the web_upload arm, because 6 of those rows carry BOTH):
+--
+--   task_request / event_request -> 'act_receipt'
+--       The Act-path provenance receipts (#413, ADR-038 §4/§6). Both content_subtypes
+--       are SYSTEM-generated and never user-supplied, so this is a safe key to match
+--       on. One surface for both tools, matching the code: ADR-046 §3 stores one role
+--       per surface and the policy for both is identical; the task-vs-event
+--       distinction stays on content_subtype, which is what search_knowledge already
+--       excludes on.
+--
+--   source_channel = 'derived' -> 'derived'
+--       The worker's AI-cleaned derivatives. Their own surface, NOT the source
+--       artifact's — see ARTIFACT_SURFACES.derived for why inheriting would make
+--       generated derivatives unaddressable as a class.
+--
+--   source = 'n8n_upload' -> 'n8n_upload'
+--       14 rows from Nov 2025 written by an EXTERNAL n8n workflow straight through
+--       PostgREST — not by any code in this repo, which is why no registry entry in
+--       check-artifact-surface-writes.js covers them and why that static guard
+--       structurally cannot. Attributed to their own surface rather than pooled into
+--       `web_app`: they are a different writer with a different trust story, and
+--       naming them is what makes that fact visible instead of buried. This is also
+--       the second precondition on the NOT NULL constraint (see below).
+--
+--   source_channel = 'web_upload' -> 'web_app'
+--       The worker upload pipeline with a browser client, i.e. exactly what
+--       resolveUploadSurface() in createArtifact.ts now returns for platform 'web'.
+--
+--   source_channel = 'mcp' -> 'api'
+--       capture.ts with no caller-supplied surface and no configured default_surface —
+--       the state production is in RIGHT NOW (the live capture_preferences blob is
+--       `{"create_derived_artifacts": true}`, so default_surface is unset), which is
+--       why there are 84 of these. `api` is the same floor the fixed capture.ts writes.
+--       It says "reached the store programmatically and declared no client", which is
+--       the honest description of a row whose surface was never recorded.
+--
+--   any other non-null source_channel -> source_channel
+--       083's rule, kept verbatim for the long tail ('gdrive', 'other', and any
+--       `discovered_*` row 083 might somehow have missed). This makes 091 a strict
+--       superset of 083 and therefore correct whether or not 083 has run.
+--
+--   everything else -> 'legacy_unrecorded'
+--       4 rows from 2025 that recorded no channel, no source and no subtype. There is
+--       no writer left to attribute them to and inventing a plausible one would be a
+--       lie. `legacy_unrecorded` says precisely what is true, and — unlike NULL — it is
+--       a KEY: the owner can map it to `excluded` in one line and be done with them.
+--       It is deliberately narrow and time-bounded, not a bucket for anything future.
+--
+--
+-- READ-TIME EFFECT TODAY: NONE. Verified against live config on 2026-08-22 — the
+-- owner's stored capture_preferences is `{"create_derived_artifacts": true}`, so
+-- surface_role_map and surface_trust_map both parse to `{}` and every one of these 219
+-- rows resolves through `default_role: 'narrative'` / `default_trust: 'medium'` both
+-- before and after this migration. Nothing is reclassified. What changes is that the
+-- rows become CONFIGURABLE — which is the entire defect. If a map entry existed for a
+-- channel key (e.g. 'mcp') and not for the surface key that replaces it ('api'), the
+-- resolvers' surface-before-channel precedence would shift the outcome; it does not,
+-- because there are no entries at all.
+--
+--
+-- WHY THIS FILE DOES NOT ADD `SET NOT NULL`, THOUGH THE COLUMN SHOULD HAVE IT
+-- The end state is both halves — a total value at every write boundary AND a non-null
+-- constraint at the database boundary, because a static guard cannot prove an
+-- arbitrary payload is non-null and cannot see a writer that is not TypeScript under
+-- packages/. But the constraint cannot land in the same change as the backfill, for
+-- two independently disqualifying reasons, BOTH of them evidenced above rather than
+-- hypothetical:
+--
+--   1. createTask.ts still omits `surface`. It could not be fixed in #584's PR
+--      (concurrent work under #653). Its insert is best-effort and non-fatal, so the
+--      constraint would not break create_task outright — it would quietly stop
+--      recording provenance, costing #413 its "every task traceable back to the
+--      thought that produced it" while every create_task call still reported success.
+--      That is a worse failure than the one being fixed.
+--   2. An external n8n workflow has written artifacts rows directly (the 14 rows
+--      above). Nothing in this repo can fix that writer, and nothing in this repo can
+--      prove it has been retired — the newest such row is 2025-11-18, which is
+--      suggestive and not evidence.
+--
+-- And per AGENTS.md, migrations reach prod via `db push` on the release train, LONG
+-- after the code that must satisfy them has deployed, run by a human who is not
+-- reading this PR. A constraint with an unmet precondition is a landmine on a timer.
+-- The countdown is machine-readable instead: `npm run check:artifact-surface-writes`
+-- prints the number of write paths that can still produce a NULL surface, and says so
+-- explicitly when that number reaches zero.
+--
+--
+-- WHY THE TRIGGER IS SUPPRESSED (do not remove without reading this — same reasoning
+-- as 083, same trigger, same consequence)
+-- `update_artifacts_updated_at` (migration 010, step 14) is a BEFORE UPDATE ... FOR
+-- EACH ROW trigger whose function sets `NEW.updated_at = NOW()` unconditionally, so it
+-- cannot be defeated from the SET clause. Left live, this backfill would stamp
+-- `updated_at = NOW()` on all 219 rows. `searchArtifacts` in
+-- packages/web/utils/knowledge/api.ts orders on `updated_at DESC`, so the first
+-- `supabase db push` after this lands would push 219 backfilled rows — most of them
+-- from 2025 — to the top of every knowledge search in the web app, and irreversibly,
+-- since the original timestamps would be gone. Disabling the trigger for the duration
+-- preserves each row's real `updated_at`, which is the honest outcome: this migration
+-- fills in a provenance field the row always should have carried, it is not a content
+-- edit.
+--
+--
+-- SAFETY
+-- Pure DML plus a transient trigger-state toggle: no column changes, nothing dropped,
+-- no function signatures, no data destroyed. The CLI runs each migration file in a
+-- transaction and `ALTER TABLE ... DISABLE TRIGGER` is transactional in Postgres, so a
+-- failure anywhere in this file rolls the trigger back to enabled along with the
+-- UPDATE — the table cannot be left with the trigger off. DISABLE/ENABLE each take a
+-- brief ACCESS EXCLUSIVE lock on `artifacts`, acceptable for a one-time backfill and
+-- the reason this names the single trigger rather than `DISABLE TRIGGER ALL` (which
+-- would also silence FK and RLS-adjacent triggers).
+--
+-- BACKWARD COMPATIBLE WITH THE DEPLOYED CODE, either side of the release. Every
+-- reader treats `surface` as an optional free-text string (`surface?: string | null`),
+-- and both resolvers consult it before source_channel already. A deployed server that
+-- predates this PR reads the backfilled values exactly as it reads the discover path's
+-- — as map keys that happen to miss an empty map.
+--
+-- NOT APPLIED BY THIS COMMIT. Per AGENTS.md, prod schema/data changes reach prod ONLY
+-- via `supabase db push` run by a human from a clean clone of main — never from an
+-- agent session, never via the Supabase MCP `apply_migration` / `execute_sql` tools.
+-- Review this file, then run it through that path.
+
+ALTER TABLE public.artifacts DISABLE TRIGGER update_artifacts_updated_at;
+
+UPDATE public.artifacts
+SET surface = CASE
+    -- Act-path provenance receipts (#413, ADR-038 §4/§6). System-generated
+    -- content_subtypes, so safe to match on. Must precede the channel arms: these
+    -- rows carry no source_channel at all.
+    WHEN content_subtype IN ('task_request', 'event_request') THEN 'act_receipt'
+    -- Worker-generated derivatives; their own surface, never the source's.
+    WHEN source_channel = 'derived' THEN 'derived'
+    -- External n8n workflow. MUST precede the web_upload arm — 6 of these 14 rows
+    -- carry source_channel = 'web_upload' as well, and the writer is the truer fact.
+    WHEN source = 'n8n_upload' THEN 'n8n_upload'
+    -- Worker upload pipeline, browser client: what resolveUploadSurface() now returns.
+    WHEN source_channel = 'web_upload' THEN 'web_app'
+    -- capture.ts with neither a caller surface nor a configured default_surface: the
+    -- same floor the fixed capture.ts writes.
+    WHEN source_channel = 'mcp' THEN 'api'
+    -- 083's field-copy rule for the long tail ('gdrive', 'other', any stray
+    -- `discovered_*`), which makes this migration a superset of 083.
+    WHEN source_channel IS NOT NULL THEN source_channel
+    -- No channel, no source, no subtype. Honest, addressable, and deliberately narrow.
+    ELSE 'legacy_unrecorded'
+  END
+WHERE surface IS NULL;
+
+ALTER TABLE public.artifacts ENABLE TRIGGER update_artifacts_updated_at;
+
+COMMENT ON COLUMN public.artifacts.surface IS
+  'Specific app/agent/ingest path the capture came through (e.g. claude_code, web_app, drive_import, act_receipt, derived). Finer than source_channel; OPEN vocab, free text, no CHECK — the values this repo''s writers stamp are single-sourced in @ahkms/shared ARTIFACT_SURFACES, and mcp-server vocab.ts SURFACES is the wider human-facing suggestion list. Read by BOTH derivations: ADR-026 surface->trust and ADR-046 section 3 surface->role, the latter storing one role PER SURFACE. A NULL here is therefore not a wrong classification but an UNADDRESSABLE row: the resolvers fall through to source_channel and then a bare default, and no surface_role_map / surface_trust_map entry can ever reach it, so a flooding path cannot be demoted (#567, #570, #584). Every write path in packages/ is inventoried by scripts/check-artifact-surface-writes.js, which pins the stamp on each closed path and counts the ones still able to write NULL. The column is intended to become NOT NULL once that count reaches zero and the external n8n writer is confirmed retired; migration 091 is the backfill that clears the way.';

@@ -1,0 +1,60 @@
+{
+  "name": "ahos-starter",
+  "version": "1.0.0",
+  "packageManager": "npm@11.6.2",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "action": "npx tsx packages/mcp-server/scripts/run-action.ts",
+    "dev": "turbo run dev",
+    "dev:worker": "npm run dev --workspace=@ahkms/worker",
+    "dev:mcp": "npm run dev --workspace=@ahkms/mcp-server",
+    "dev:web": "npm run dev --workspace=@ahkms/web",
+    "mcp:start": "npm run start --workspace=@ahkms/mcp-server",
+    "build:worker:docker": "docker build --no-cache -f packages/worker/Dockerfile -t worker .",
+    "docker:worker": "npm run build:worker:docker",
+    "docker:worker:stop": "docker stop worker-dev && docker rm worker-dev",
+    "build": "turbo run build",
+    "build:web": "npm run build --workspace=@ahkms/web",
+    "build:worker": "npm run build --workspace=@ahkms/worker",
+    "build:all": "turbo run build",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "guards": "node scripts/guards.js --staged",
+    "guards:push": "node scripts/guards.js --push",
+    "guards:all": "node scripts/guards.js --all",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "check:types": "node scripts/check-type-duplicates.js",
+    "check:migration-signatures": "node packages/worker/scripts/check-migration-signatures.js",
+    "check:migration-versions": "node packages/worker/scripts/check-migration-versions.js",
+    "check:migration-comments": "node packages/worker/scripts/check-migration-comments.js",
+    "check:migration-collisions": "node packages/worker/scripts/check-migration-collisions.js",
+    "check:user-id-reads": "node scripts/check-user-id-reads.js",
+    "check:artifact-surface-writes": "node scripts/check-artifact-surface-writes.js",
+    "check:architecture-drift": "node scripts/check-architecture-drift.js",
+    "check:core-isomorphic": "node scripts/check-core-isomorphic.js",
+    "check:core-import-direction": "node scripts/check-core-import-direction.js",
+    "check:circular-deps": "node scripts/check-circular-deps.js",
+    "check:esm-smoke": "node scripts/check-esm-smoke.js",
+    "check:action-docs": "node scripts/gen-action-docs.js --check",
+    "check:deps": "node scripts/check-undeclared-deps.js",
+    "check:standalone-lockfiles": "node scripts/check-standalone-lockfiles.js"
+  },
+  "devDependencies": {
+    "baseline-browser-mapping": "^2.9.15",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.39.1",
+    "railway": "^3.16.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
+  }
+}

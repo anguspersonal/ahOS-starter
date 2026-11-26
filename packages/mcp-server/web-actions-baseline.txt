@@ -1,0 +1,6 @@
+# Legacy web client actions in packages/web/src/lib/actionRegistry.ts not yet in @ahkms/core/action-manifest.json.
+# This baseline may only shrink as client actions are migrated to core actions; delete this file when empty.
+# Adding a line requires explicit review:architect sign-off.
+# See issue #1555, ADR-105, and packages/mcp-server/src/__tests__/surfaceRegistry.test.ts.
+navigate
+

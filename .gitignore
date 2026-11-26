@@ -1,0 +1,124 @@
+# Dependencies
+node_modules/
+# package-lock.json should be committed for reproducible builds
+
+# Environment variables (user manages these separately)
+.env
+.env.local
+.env.*.local
+# .env.example files should be committed (they're templates without secrets)
+
+# Supabase
+.supabase/
+supabase/.temp/
+supabase/schema.sql
+supabase/*_schema_*.sql
+
+# OS files
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# IDE
+.vscode/
+.idea/
+.codex/
+# Claude config is local-only EXCEPT shared, repeatable team config that travels
+# with the repo: skills, hooks, the README, and settings.json (shared project
+# config — e.g. enabling the github-agent MCP server). settings.local.json stays
+# ignored (machine-specific); the branch-guard hook is inert until wired in.
+.claude/*
+!.claude/README.md
+!.claude/settings.json
+!.claude/hooks/
+!.claude/skills/
+# The repo-skill registration manifest (#689) — which .claude/skills bodies are
+# served from ahkms, and the receipt scripts/check-skill-bodies.js checks them
+# against. Lives beside the skills tree rather than inside it, because Claude
+# Code scans that tree for skill directories.
+!.claude/skill-registry.json
+!.claude/settings.json
+claude/settings.json
+# The owner's mirrored ~/.claude/settings.json (#760/#566) — cross-machine Claude
+# Code preferences, versioned deliberately. See .claude/README.md for the
+# boundary against settings.local.json, which stays ignored below.
+!.claude/user-settings.json
+.claude/skills/**/*.local.*
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+docs/Reports/temporaryLogs.md
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+packages/*/dist/
+
+# Turbopack cache
+.turbo/
+
+# Test/data files
+data/samples/
+
+# Local scratch logs (do not commit)
+testlog.json
+temp-logs.json
+memory-os/
+
+# Session resume-pointer notes (/end skill) — per-worktree, pointers only,
+# delete-freely; never shipped (see .claude/skills/end/SKILL.md, issue #132)
+sessions/notes/
+
+# Local Cursor rules override (do not commit)
+.cursor/.cursorrules
+.cursor/skills/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+# NB: docs/Reports/ is a tracked, indexed docs lane (audit reports) — do NOT
+# blanket-ignore it, or new reports become silently untracked and slip past
+# docs-index-guard. The one scratch file there is ignored individually above
+# (docs/Reports/temporaryLogs.md).
+
+
+
+# Archive folder (historical docs at repo root only)
+/archive/
+
+# Cursor MCP (ignore specific MCP config files)
+.cursor/mcp.json
+.cursor/mcp.json.example
+.cursor/mcp.json.example.backup
+.cursor/mcp.json.example.backup.backup
+.cursor/mcp.json.example.backup.backup.backup
+.cursor/mcp.json.example.backup.backup.backup.backup
+.cursor/mcp.json.example.backup.backup.backup.backup.backup
+.cursor/mcp.json.example.backup.backup.backup.backup.backup.backup
+
+# Vendored skills snapshot — retired (#122). ADR-020 requires private/cowork
+# mirrors to stay gitignored (no GitHub leak); regenerate locally for quick
+# reference if you want it, but never commit it.
+reference/dotclaude/
+
+# Documentation (update 22/11, removed from git ignore so agenst can interact with)
+# docs/
+# docs/*
+# !docs/WORKFLOW.md
+# plans/
+# plans/*
+
+# Package manager artifacts and build prompts
+.pnpm*
+pnpm-workspace.yaml
+pnpm-workspace.yaml.tmp*
+*.pnpm-lock.yaml.tmp*
+.railway/.cac-migration.json

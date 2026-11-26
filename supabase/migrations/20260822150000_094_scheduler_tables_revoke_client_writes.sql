@@ -1,0 +1,100 @@
+-- Migration 094: revoke client-role write access to the scheduler tables
+-- Issue: #522 (anon role can acquire/clear/wedge scheduler locks)
+-- Refs:  #516 (the empirical PATCH-as-anon finding that surfaced this) ·
+--        migration 073 (creates both tables, ADR-016 Slice 3, #53) ·
+--        #601 (tracks enabling RLS on these tables separately — NOT done here)
+-- Date:  2026-08-22
+--
+-- WHAT IS WRONG
+-- Migration 073 created `public.scheduler_locks` and `public.scheduler_runs`
+-- with no GRANT/REVOKE statements of its own, so both tables carry Supabase's
+-- default bootstrap privileges: `anon`, `authenticated` and `service_role` all
+-- hold the full table-privilege set (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/...).
+-- #516 verified this empirically against prod: a PATCH sent with only the
+-- public `anon` key modified `scheduler_locks.locked_at`. The `anon` key ships
+-- in every client, so this is a public write surface onto the single-flight
+-- lock that gates the discover/enrich/dedup/alerts cadences and their run
+-- history — anyone holding it can acquire, clear, or wedge a lock, or forge
+-- run-history rows.
+--
+-- WHY service_role-ONLY IS CORRECT
+-- Every reader and writer of these two tables in this repo already goes
+-- through a service-role Supabase client — there is no legitimate
+-- anon/authenticated caller to preserve:
+--   * packages/mcp-server/src/supabase.ts creates its client with
+--     `env.supabaseServiceRoleKey` (comment: "bypasses RLS. Acceptable for a
+--     single-user Phase 0 trial."); packages/mcp-server/src/schedule/lock.ts
+--     and runLog.ts import that client exclusively.
+--   * packages/worker/src/utils/supabase.ts creates its client with
+--     `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SERVICE_KEY` (comment: "Uses
+--     service role key to bypass RLS for backend operations");
+--     packages/worker/src/schedule/lock.ts and runLog.ts import that client
+--     exclusively.
+--   * `packages/web` has zero references to `scheduler_locks` or
+--     `scheduler_runs` — no dashboard or browser-side (anon/authenticated key)
+--     reader exists anywhere in the repo.
+-- Since nothing legitimate reads or writes these tables under anon or
+-- authenticated, this migration revokes every privilege those roles hold —
+-- the tables become invisible to both client-facing roles via PostgREST,
+-- fully closing the public surface rather than leaving a read-only crack (or
+-- REFERENCES/TRIGGER/MAINTAIN, none of which PostgREST ever exercises but all
+-- of which a durable security record should still name accurately) in it.
+-- `PUBLIC` is named alongside them as defence-in-depth: a grant made to
+-- `PUBLIC` is not removed by revoking from a specific role, and while neither
+-- 073 nor Supabase's bootstrap grants anything to `PUBLIC` on these tables
+-- today, naming it costs nothing and closes that path if it's ever opened.
+-- `service_role` is untouched throughout: it is never named in a REVOKE
+-- below, so its default ALL-privileges grant stands.
+--
+-- WHY GRANTS, NOT RLS
+-- #601 already tracks enabling RLS on six tables with RLS currently disabled,
+-- including these two (confirmed live via the read-only performance/security
+-- advisor on project `YOUR_PROJECT_REF`, 2026-08-22: `rls_disabled_in_public`
+-- fires for both `public.scheduler_locks` and `public.scheduler_runs`). That is
+-- a separate, owner-level design decision (policies, not just an on/off
+-- switch) tracked in #601 and deliberately out of scope here. Revoking the
+-- write grants closes the concrete exploit today without pre-empting that
+-- decision; enabling RLS with zero policies later is fully compatible with
+-- this migration (RLS is checked in addition to grants, never instead of
+-- them).
+--
+-- BEFORE / AFTER (table-level privileges; `service_role` unchanged both sides)
+--
+--   role            | scheduler_locks (before) | scheduler_locks (after)
+--   ----------------|--------------------------|-------------------------
+--   anon            | ALL (SELECT, INSERT,     | (none) — dropped from the
+--                   | UPDATE, DELETE, TRUNCATE,|   ACL entirely
+--                   | REFERENCES, TRIGGER,     |
+--                   | MAINTAIN)                |
+--   authenticated   | ALL (as above)           | (none)
+--   PUBLIC          | (none — no `grant ... to | (none, explicitly revoked
+--                   | public` in 073 or the    |   as defence-in-depth)
+--                   | remote_schema baselines) |
+--   service_role    | ALL                      | ALL (unchanged)
+--
+--   role            | scheduler_runs (before)  | scheduler_runs (after)
+--   ----------------|--------------------------|-------------------------
+--   anon            | ALL (as above)           | (none)
+--   authenticated   | ALL (as above)           | (none)
+--   PUBLIC          | (none, as above)         | (none, explicitly revoked)
+--   service_role    | ALL                      | ALL (unchanged)
+--
+-- `REVOKE ALL PRIVILEGES` (rather than naming SELECT/INSERT/UPDATE/DELETE/
+-- TRUNCATE individually) is deliberate: naming only the PostgREST-reachable
+-- verbs would leave REFERENCES/TRIGGER/MAINTAIN in the ACL and make the
+-- "(none)" claim above false, even though none of those three is reachable
+-- over the anon/authenticated PostgREST surface today. This migration is the
+-- durable record of what got locked down, so it says exactly what is true.
+--
+-- IDEMPOTENT: REVOKE on a privilege (or grantee) the role does not currently
+-- hold is a Postgres no-op, not an error, so this migration is safe to run
+-- more than once (and against a project where a prior hand-run REVOKE already
+-- closed part of the gap).
+
+revoke all privileges
+  on table public.scheduler_locks
+  from public, anon, authenticated;
+
+revoke all privileges
+  on table public.scheduler_runs
+  from public, anon, authenticated;

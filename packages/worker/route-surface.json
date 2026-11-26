@@ -1,0 +1,25 @@
+{
+  "exemptions": {
+    "/health": {
+      "reason": "health",
+      "note": "Worker liveness probe (Railway). Unauthenticated and returns static health JSON."
+    },
+    "static": {
+      "reason": "public_unauthenticated",
+      "note": "Static assets served from packages/worker/public via express.static."
+    },
+    "/": {
+      "reason": "non_json_response",
+      "note": "Root HTML landing page served from packages/worker/views/index.html."
+    },
+    "/api/upload": {
+      "reason": "upload",
+      "note": "Multipart file upload endpoint (multer) that cannot be validated as a single JSON action payload."
+    },
+    "/api/pdf": {
+      "reason": "upload",
+      "note": "Raw PDF binary body endpoints (express.raw application/pdf up to 50mb; app.js:130)."
+    }
+  },
+  "pending_migration": {}
+}

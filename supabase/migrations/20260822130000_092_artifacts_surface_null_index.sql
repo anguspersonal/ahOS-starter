@@ -1,0 +1,139 @@
+-- Migration 092: formalise the partial index on `artifacts.surface IS NULL` (#746)
+-- Issue: #746 (migration 091 timed out in prod on an unindexed scan; the index below
+--        was created by hand to unwedge it and exists in no migration file)
+-- Refs:  #584 / migration 091 (the backfill this unwedged),
+--        scripts/check-artifact-surface-writes.js (the code half of the NOT NULL
+--        countdown), docs/guides/SUPABASE_MIGRATION_HISTORY_RUNBOOK.md
+-- Date:  2026-08-22
+--
+-- WHAT THIS FILE IS
+-- Not a new index. `artifacts_surface_null_idx` ALREADY EXISTS IN PRODUCTION, created
+-- by hand in the SQL editor on 2026-08-22 to unwedge migration 091. This file is the
+-- missing repo half of that: DDL that reached prod outside the repo flow is drift
+-- until a migration records it, and a fresh environment (`supabase db reset`, a
+-- preview branch, a rebuild) would otherwise not get it. Everywhere but production this
+-- file IS the index. Against production the `CREATE INDEX` is a no-op — but the file as
+-- a whole is NOT, because the `COMMENT ON INDEX` below is unconditional and the
+-- hand-made index carries no comment. See NOT APPLIED BY THIS COMMIT at the foot of
+-- this header: that one statement is why this must be PUSHED and never substituted with
+-- a history-only `migration repair --status applied`.
+--
+--
+-- WHY THE INDEX EXISTS (#746)
+-- 091's only predicate is `WHERE surface IS NULL`. It matched 219 rows — and
+-- `artifacts.surface` had no index, so FINDING those 219 meant a sequential scan of a
+-- 153,112-row table whose rows each carry a 1536-dimension embedding, a
+-- `search_vector` and the full body text. That scan alone outruns the 8s statement
+-- timeout: a bare `SELECT count(*) … WHERE surface IS NULL` through PostgREST died
+-- with `57014 canceling statement due to statement timeout`, and `db push` cancelled
+-- on the same scan. With the index, 091 completed in seconds.
+--
+-- THE ROW COUNT WAS NEVER THE PROBLEM — THE PREDICATE WAS. 219 rows is not a mass-DML
+-- migration by any measure, and the runbook's batch drain would not have rescued it
+-- either: the drain's own batch is `SELECT id … WHERE surface IS NULL LIMIT 20000`,
+-- the same predicate, and with only 219 matching rows the LIMIT never fills, so every
+-- batch would have paid the same full scan and died the same way. What cost eight
+-- seconds was reaching the rows, not writing them.
+--
+--
+-- WHY IT IS KEPT RATHER THAN DROPPED NOW THE BACKFILL IS DONE
+-- `surface IS NULL` is the DATA half of the NOT NULL countdown 091's header sets out.
+-- `npm run check:artifact-surface-writes` counts the CODE half — the write paths under
+-- packages/ that can still emit a null surface (createTask.ts, #653) — by pure static
+-- analysis; it never opens a database connection. The data half is this query, and
+-- nothing in the repo can run it: it has to be asked of production by hand. Before
+-- this index it was the query that could not be asked. Both halves must read zero
+-- before `ALTER TABLE … SET NOT NULL` is safe, and the external n8n writer named in
+-- 091's header — which no repo change can fix and no static guard can see — is
+-- visible ONLY through the data half.
+--
+-- Its cost is the size of the defect and nothing else. A partial index holds one entry
+-- per matching row; the predicate matches zero rows today, so the index is empty. Each
+-- future null-surface row adds exactly one entry and becomes findable in milliseconds
+-- instead of hiding behind a timeout. An index that only holds the rows you have a
+-- problem with is the right shape for a countdown — and the right reason not to prune
+-- it as "unused" when the advisor reports zero scans against it (see the COMMENT ON
+-- INDEX below, which is there to say so at the point someone is looking).
+--
+--
+-- WHY `(id)` AND NOT A PLAIN INDEX ON `surface`
+-- An index on `surface` would carry all 153k rows to answer a question about 219 of
+-- them. The partial index inverts that: the predicate IS the filter, so the index holds
+-- only rows that match it, and `id` is the payload — the narrowest column on the table,
+-- and the join key any future top-up backfill or batch drain already keys on
+-- (`WHERE a.id = batch.id`).
+--
+--
+-- WHY NON-CONCURRENT HERE, THOUGH THE PRODUCTION ONE WAS CONCURRENT
+-- Two independent reasons, and they do not conflict with that choice:
+--
+--   1. `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block (25001), and
+--      the Supabase CLI runs each migration file in one. Concurrent is not merely
+--      undesirable in this file, it is illegal. It was the right call in the SQL
+--      editor, where prod was live and there were 153k rows to scan.
+--
+--   2. Non-concurrent costs nothing here. Against production `IF NOT EXISTS`
+--      short-circuits before any scan — no lock taken, no heap read. Everywhere else
+--      the table is empty or small, and the brief SHARE lock a real build takes
+--      (blocking writes, never reads) is over instantly. The bad case — a LARGE table
+--      WITHOUT the index — cannot arise: the only large database is the one that
+--      already has it.
+--
+--
+-- THE NAME IS LOAD-BEARING. DO NOT TIDY IT.
+-- `IF NOT EXISTS` matches on NAME ONLY; it never compares definitions. Renaming this
+-- to the repo's more common `idx_artifacts_…` shape would therefore not rename
+-- anything — it would MISS the live production index and build a second, identical one
+-- beside it. `artifacts_surface_null_idx` is verbatim the name the owner ran (recorded
+-- in #746's resolution comment) and is Postgres's own default naming shape, which this
+-- schema already carries for the other hand-made index on this table
+-- (`artifacts_plain_text_idx`, materialised into the `remote_schema` snapshot by
+-- exactly this route). The definition below is likewise verbatim minus CONCURRENTLY,
+-- so the two agree on the one thing `IF NOT EXISTS` will not check for you.
+--
+--
+-- VERIFIED READ-ONLY AGAINST PRODUCTION, 2026-08-22 (project YOUR_PROJECT_REF)
+-- `surface IS NULL` returns 0 rows in 472ms, while the complement `surface IS NOT
+-- NULL` — which no partial index covers — still dies at 8.3s with 57014. The speed-up
+-- is specific to this predicate rather than the table having warmed up, which is what
+-- makes it evidence the index is live and not a guess.
+--
+--
+-- SAFETY
+-- One idempotent `CREATE INDEX IF NOT EXISTS` plus its comment. No table, column,
+-- constraint, function or trigger is created, altered or dropped; no DML against
+-- application data; no row of it read or written. Both statements are idempotent, but
+-- in different ways, and the difference matters at push time: the CREATE SKIPS when the
+-- index is there, while the COMMENT always runs and rewrites the same text, so a re-run
+-- converges to an identical catalog rather than doing nothing. Backward compatible with
+-- every deployed version of the app by construction: an index changes query PLANS,
+-- never results, and no reader consults an index comment, so neither statement is
+-- observable to the application at all.
+--
+-- NOT APPLIED BY THIS COMMIT. Per AGENTS.md, prod schema changes reach prod ONLY via
+-- `supabase db push` run by a human from a clean clone of `main` — never from an agent
+-- session, never via the Supabase MCP `apply_migration` / `execute_sql` tools.
+--
+-- WHAT THAT PUSH WILL ACTUALLY DO — read this before running it, because the obvious
+-- expectation is wrong. The `CREATE INDEX` is a no-op and will report
+-- `NOTICE: relation "artifacts_surface_null_idx" already exists, skipping`. The
+-- `COMMENT ON INDEX` is NOT conditional: it has no `IF NOT EXISTS` and no guard, and
+-- the index was created by the bare `CREATE INDEX CONCURRENTLY` in #746's remedy, which
+-- cannot produce a comment. So production has no comment on this index today and the
+-- push writes it for the first time. That single statement is the whole of what this
+-- file changes in production — and it is not decoration: it is the only thing standing
+-- between a deliberately-empty index and an advisor pruning it as unused.
+--
+-- WHICH IS WHY THIS MUST BE PUSHED, NOT REPAIRED. After merge this file is exactly the
+-- shape the runbook's repair decision tree Step 2 calls "already live": a repo
+-- migration absent from remote history whose DDL someone ran by hand. Taking that
+-- step's `migration repair --status applied` here would record 092 as applied while
+-- the comment never ran, and the drift detector — which compares history to files, not
+-- to the live schema — would exit 0 on the gap forever. Step 2 now carries the
+-- carve-out for idempotent files; this migration is its worked case.
+
+CREATE INDEX IF NOT EXISTS artifacts_surface_null_idx
+  ON public.artifacts (id) WHERE surface IS NULL;
+
+COMMENT ON INDEX public.artifacts_surface_null_idx IS
+  'Partial index over the rows migration 091 had to find and could not: `surface IS NULL` on a 153k-row table with no index on that column is a sequential scan that outruns the 8s statement timeout, which is how 091 wedged `db push` over 219 rows (#746). DELIBERATELY EMPTY IN THE HEALTHY STATE — it holds one entry per null-surface row and there are currently none, so an advisor reporting zero scans and zero size is reporting success, NOT an unused index to prune. It is the only way to ask the data half of the NOT NULL countdown (`scripts/check-artifact-surface-writes.js` counts the code half statically and never queries the database), and the only way to see a null-surface row written by the external n8n workflow, which writes straight through PostgREST and which no repo change can fix. Drop it when `artifacts.surface` becomes NOT NULL and the predicate is unsatisfiable, not before.';

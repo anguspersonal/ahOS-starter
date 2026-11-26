@@ -1,0 +1,58 @@
+{
+  "name": "@ahkms/core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./actions": {
+      "types": "./dist/actions/index.d.ts",
+      "import": "./dist/actions/index.js",
+      "default": "./dist/actions/index.js"
+    },
+    "./actions/artifacts/knowledgeSearch/rank": {
+      "types": "./dist/actions/artifacts/knowledgeSearch/rank.d.ts",
+      "import": "./dist/actions/artifacts/knowledgeSearch/rank.js",
+      "default": "./dist/actions/artifacts/knowledgeSearch/rank.js"
+    },
+    "./engine": {
+      "types": "./dist/engine/index.d.ts",
+      "import": "./dist/engine/index.js",
+      "default": "./dist/engine/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "default": "./dist/adapters/index.js"
+    },
+    "./action-manifest.json": "./action-manifest.json"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "gen:action-manifest": "npm run build && node scripts/gen-action-manifest.mjs",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@google/genai": "^2.27.0",
+    "@notionhq/client": "^5.27.0",
+    "@octokit/rest": "^22.0.1",
+    "@supabase/supabase-js": "^2.89.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.8"
+  }
+}

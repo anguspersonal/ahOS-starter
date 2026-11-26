@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-theme="day" class="theme-day">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ahOS Co-Editing Workspace</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('ahos_theme');
+          if (t === 'night') {
+            document.documentElement.setAttribute('data-theme', 'night');
+            document.documentElement.classList.add('theme-night');
+            document.documentElement.classList.remove('theme-day');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'day');
+            document.documentElement.classList.add('theme-day');
+            document.documentElement.classList.remove('theme-night');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="/env-config.js"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

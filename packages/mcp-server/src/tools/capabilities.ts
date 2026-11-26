@@ -1,0 +1,18 @@
+export {
+	type CapabilityKind,
+	type CapabilityKind as Kind,
+	type CapabilityScope,
+	type CapabilityScope as Scope,
+	CLIENT_SURFACES,
+	type ClientSurface,
+	findSuggestions,
+	KINDS,
+	levenshtein,
+	normalizeCapabilityLookup,
+	readCapabilityProps,
+	RUNTIME_SURFACES,
+	type RuntimeSurface,
+	SCOPES,
+	STORAGE_LOCATIONS,
+	type StorageLocation,
+} from "@ahkms/core/actions";
